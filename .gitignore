@@ -1,0 +1,18 @@
+# Code::Blocks build output and per-user files
+bin/
+obj/
+*.o
+*.exe
+*.depend
+*.layout
+*.bak
+*.save
+*.cbTemp
+
+# Files the program generates at runtime (final results get copied to docs/)
+logs/
+screenshots/
+
+# Windows clutter
+Thumbs.db
+desktop.ini
