@@ -1,11 +1,15 @@
 #pragma once
 
+#include <vector>
+
 #include "Body.h"
 #include "Camera.h"
 #include "Cloth.h"
 #include "Environment.h"
 #include "FpsCounter.h"
+#include "Game.h"
 #include "Knot.h"
+#include "Pattern.h"
 #include "ToonRamp.h"
 #include "Wind.h"
 
@@ -23,10 +27,17 @@ struct AppState {
     Cloth cloth;
     Wind wind;
     Knot knot;
+    Game game;
+
+    std::vector<FabricPattern> patterns;
+    FabricTexture fabric;
+    int patternIndex = 3;
 
     bool paused = false;
     bool showDebug = false;
-    float survivalTime = 0.0f;
+    bool sandbox = false;
+    bool gripKeyHeld = false;
+    float timeScale = 1.0f;
 
     double lastFrameTime = 0.0;
     double physicsAccumulator = 0.0;

@@ -25,8 +25,16 @@ Body::Body()
     addCapsule(Vec3(0.11f, 0.38f, 0.0f), Vec3(0.11f, 0.10f, 0.0f), 0.078f, kSkin, true);
     addCapsule(Vec3(-0.10f, 0.86f, 0.0f), Vec3(0.10f, 0.86f, 0.0f), 0.15f, kPants, true);
     addCapsule(Vec3(0.0f, 0.98f, 0.0f), Vec3(0.0f, 1.32f, 0.0f), 0.21f, kVest, true);
-    addCapsule(Vec3(-0.27f, 1.36f, 0.0f), Vec3(-0.41f, 1.02f, 0.06f), 0.06f, kSkin, true);
-    addCapsule(Vec3(0.27f, 1.36f, 0.0f), Vec3(0.41f, 1.02f, 0.06f), 0.06f, kSkin, true);
+    addCapsule(Vec3(-0.27f, 1.36f, 0.0f), Vec3(-0.41f, 1.02f, 0.06f), 0.06f, kSkin, false, Pose::ArmsDown);
+    addCapsule(Vec3(0.27f, 1.36f, 0.0f), Vec3(0.41f, 1.02f, 0.06f), 0.06f, kSkin, false, Pose::ArmsDown);
+    for (float side = -1.0f; side <= 1.0f; side += 2.0f) {
+        const Vec3 shoulder(side * 0.27f, 1.36f, 0.0f);
+        const Vec3 elbow(side * 0.34f, 1.12f, 0.10f);
+        const Vec3 hand(side * 0.10f, 0.99f, 0.30f);
+        addCapsule(shoulder, elbow, 0.06f, kSkin, false, Pose::Gripping);
+        addCapsule(elbow, hand, 0.055f, kSkin, false, Pose::Gripping);
+        addCapsule(hand, hand, 0.058f, kSkin, false, Pose::Gripping);
+    }
     addCapsule(Vec3(0.0f, 1.66f, 0.0f), Vec3(0.0f, 1.66f, 0.0f), 0.23f, kSkin, false);
     addCapsule(Vec3(0.0f, 1.74f, -0.03f), Vec3(0.0f, 1.74f, -0.03f), 0.215f, kHair, false);
     addCapsule(Vec3(-0.08f, 1.69f, 0.205f), Vec3(-0.08f, 1.69f, 0.205f), 0.028f, kEye, false);
@@ -37,19 +45,19 @@ Body::Body()
     waistRadiusZ_ = 0.235f;
 }
 
-void Body::addCapsule(const Vec3& a, const Vec3& b, float radius, const Vec3& color, bool collides)
+void Body::addCapsule(const Vec3& a, const Vec3& b, float radius, const Vec3& color, bool collides, Pose pose)
 {
     const Capsule c{a, b, radius, color};
     if (collides) {
         colliders_.push_back(c);
         collisionTop_ = std::max(collisionTop_, std::max(a.y, b.y) + radius);
     }
-    buildCapsuleMesh(c);
+    buildCapsuleMesh(c, pose);
 }
 
 // A capsule is a sphere swept along a segment, so it is drawn as a sphere
 // split at the equator: the upper half is centred on b, the lower half on a.
-void Body::buildCapsuleMesh(const Capsule& c)
+void Body::buildCapsuleMesh(const Capsule& c, Pose pose)
 {
     const float pi = 3.14159265f;
     const Vec3 axisVec = c.b - c.a;
@@ -92,7 +100,7 @@ void Body::buildCapsuleMesh(const Capsule& c)
             indices_.push_back(i1);
         }
     }
-    ranges_.push_back({firstIndex, indices_.size() - firstIndex, c.color});
+    ranges_.push_back({firstIndex, indices_.size() - firstIndex, c.color, pose});
     rampCoords_.resize(positions_.size());
 }
 
@@ -138,7 +146,11 @@ void Body::draw(const ToonRamp& ramp, const Vec3& lightDir, float brightness)
     glVertexPointer(3, GL_FLOAT, sizeof(Vec3), &positions_[0].x);
     glTexCoordPointer(1, GL_FLOAT, 0, rampCoords_.data());
 
+    const Pose hidden = gripping_ ? Pose::ArmsDown : Pose::Gripping;
     for (const MeshRange& r : ranges_) {
+        if (r.pose == hidden) {
+            continue;
+        }
         const Vec3 c = r.color * brightness;
         glColor3f(c.x, c.y, c.z);
         glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(r.indexCount), GL_UNSIGNED_INT,

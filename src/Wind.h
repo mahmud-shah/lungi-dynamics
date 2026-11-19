@@ -24,7 +24,7 @@ public:
     void setEnabled(bool enabled) { enabled_ = enabled; }
     bool enabled() const { return enabled_; }
 
-    void reset();
+    void reset(unsigned int seed = 20261125u);
     void triggerGust();
     void update(float dt);
 

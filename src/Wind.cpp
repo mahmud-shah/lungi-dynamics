@@ -59,9 +59,9 @@ float Wind::randomRange(float lo, float hi)
     return dist(rng_);
 }
 
-void Wind::reset()
+void Wind::reset(unsigned int seed)
 {
-    rng_.seed(20261125u);
+    rng_.seed(seed);
     time_ = 0.0f;
     speed_ = preset().baseSpeed;
     heading_ = kBaseHeading;

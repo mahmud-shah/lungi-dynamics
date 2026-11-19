@@ -79,3 +79,14 @@ Vec3 OrbitCamera::eye() const
                           distance_ * std::sin(pitch_),
                           horizontal * std::cos(yaw_));
 }
+
+// Return to the default three-quarter front view by the shortest turn,
+// so the camera does not spin through every lap made on the title screen.
+void OrbitCamera::faceFront()
+{
+    const float twoPi = 6.2831853f;
+    const float frontYaw = 0.6f;
+    goalYaw_ = frontYaw + twoPi * std::round((yaw_ - frontYaw) / twoPi);
+    goalPitch_ = 0.22f;
+    goalDistance_ = 4.0f;
+}

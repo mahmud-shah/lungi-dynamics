@@ -25,6 +25,8 @@ const float kLungiFlatRadius = 0.30f;
 const float kLungiLength = 0.84f;
 
 const float kStormEaseRate = 0.8f;
+const float kTitleOrbitSpeed = 0.15f;
+const float kSlowMotionScale = 0.25f;
 
 void printGlInfo()
 {
@@ -33,13 +35,40 @@ void printGlInfo()
     std::printf("GL version  : %s\n", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
 }
 
-void restartRun()
+void selectPattern(int index)
+{
+    const int count = static_cast<int>(g_app.patterns.size());
+    g_app.patternIndex = (index % count + count) % count;
+    g_app.fabric.upload(g_app.patterns[g_app.patternIndex]);
+}
+
+void resetWorld(unsigned int stormSeed)
 {
     g_app.cloth.reset();
     g_app.knot.reset();
-    g_app.wind.reset();
-    g_app.survivalTime = 0.0f;
+    g_app.wind.reset(stormSeed);
     g_app.physicsAccumulator = 0.0;
+}
+
+void showTitle()
+{
+    g_app.game.showTitle();
+    g_app.sandbox = false;
+    g_app.paused = false;
+    g_app.timeScale = 1.0f;
+    g_app.wind.setPreset(0);
+    resetWorld(20261125u);
+}
+
+void startRun()
+{
+    g_app.game.startRun();
+    g_app.camera.faceFront();
+    g_app.sandbox = false;
+    g_app.paused = false;
+    g_app.timeScale = 1.0f;
+    g_app.wind.setPreset(0);
+    resetWorld(20261125u + static_cast<unsigned int>(g_app.game.runNumber()));
 }
 
 void initScene()
@@ -49,33 +78,46 @@ void initScene()
     glEnable(GL_LINE_SMOOTH);
 
     g_app.toonRamp.create();
+    g_app.patterns = Patterns::builtIn();
+    g_app.fabric.create();
+    selectPattern(g_app.patternIndex);
+
     const Body& body = g_app.body;
     g_app.cloth.buildTube(TubeShape{body.waistCenter(), body.waistRadiusX(), body.waistRadiusZ(),
                                     kLungiFlatRadius, kLungiLength, kLungiAround, kLungiDown});
-    restartRun();
+    showTitle();
     g_app.lastFrameTime = Clock::nowSeconds();
     glCheck("initScene");
 }
 
 void physicsStep(float dt)
 {
+    Game& game = g_app.game;
+    const bool playing = game.state() == GameState::Playing;
+
+    if (playing && !g_app.sandbox) {
+        g_app.wind.setPreset(game.stormStage());
+    }
     g_app.wind.update(dt);
+
+    g_app.knot.setStrength(game.difficulty().knotStrength * game.knotStrengthMultiplier());
     g_app.cloth.setWaistDrop(g_app.knot.waistDrop());
     g_app.cloth.step(dt, kGravity, g_app.body, g_app.wind);
 
-    g_app.knot.update(dt, g_app.cloth.knotLoad());
-    if (g_app.knot.failed()) {
-        if (g_app.cloth.knotAttached()) {
-            g_app.cloth.releaseKnot();
-        }
-    } else {
-        g_app.survivalTime += dt;
+    if (game.state() == GameState::Title) {
+        return;
     }
+    g_app.knot.update(dt, g_app.cloth.knotLoad());
+    if (g_app.knot.failed() && g_app.cloth.knotAttached()) {
+        g_app.cloth.releaseKnot();
+    }
+    game.update(dt, g_app.knot.failed(), g_app.wind.speed(), g_app.knot.waistDrop(), g_app.gripKeyHeld);
+    g_app.body.setGripping(game.gripping());
 }
 
 // Fixed-timestep loop: physics always advances in equal 1/120 s steps, no
-// matter how fast frames are drawn. That keeps the solver stable and makes
-// results repeatable for the evaluation runs.
+// matter how fast frames are drawn. Slow motion only feeds less real time
+// into the accumulator, so the physics itself is unchanged.
 void advanceSimulation(double frameTime)
 {
     g_app.substepsLastFrame = 0;
@@ -83,7 +125,7 @@ void advanceSimulation(double frameTime)
         return;
     }
 
-    g_app.physicsAccumulator += frameTime;
+    g_app.physicsAccumulator += frameTime * g_app.timeScale;
     while (g_app.physicsAccumulator >= kPhysicsDt && g_app.substepsLastFrame < kMaxSubsteps) {
         physicsStep(static_cast<float>(kPhysicsDt));
         g_app.physicsAccumulator -= kPhysicsDt;
@@ -110,6 +152,9 @@ void onDisplay()
     g_app.fps.registerFrame(now);
 
     advanceSimulation(frameTime);
+    if (g_app.game.state() == GameState::Title) {
+        g_app.camera.rotate(kTitleOrbitSpeed * static_cast<float>(frameTime), 0.0f);
+    }
     g_app.camera.update(static_cast<float>(frameTime));
     easeStormTowardWind(static_cast<float>(frameTime));
 
@@ -125,11 +170,11 @@ void onDisplay()
     glEnable(GL_FOG);
     env.drawGround();
     g_app.body.draw(g_app.toonRamp, env.lightDir(), env.brightness());
-    g_app.cloth.draw(g_app.toonRamp, env.lightDir(), env.brightness());
+    g_app.cloth.draw(g_app.toonRamp, g_app.fabric, env.lightDir(), env.brightness());
     const Body& body = g_app.body;
     const WaistBand band{body.waistCenter() - Vec3(0.0f, g_app.knot.waistDrop(), 0.0f),
                          body.waistRadiusX(), body.waistRadiusZ()};
-    g_app.knot.draw(band, Cloth::outsideColor(), g_app.toonRamp, env.lightDir(), env.brightness());
+    g_app.knot.draw(band, g_app.fabric.mainColor(), g_app.toonRamp, env.lightDir(), env.brightness());
     g_app.wind.drawStreaks(env.brightness());
     glDisable(GL_FOG);
 
@@ -152,35 +197,68 @@ void onReshape(int width, int height)
     glViewport(0, 0, g_app.windowWidth, g_app.windowHeight);
 }
 
-void onKeyboard(unsigned char key, int, int)
+void handleTitleKey(unsigned char key)
+{
+    switch (key) {
+    case 13:
+    case ' ':
+        startRun();
+        break;
+    case 27:
+        glutLeaveMainLoop();
+        break;
+    default:
+        break;
+    }
+}
+
+void handleResultsKey(unsigned char key)
+{
+    switch (key) {
+    case 13:
+    case 'r': case 'R':
+        startRun();
+        break;
+    case 27:
+    case 't': case 'T':
+        showTitle();
+        break;
+    default:
+        break;
+    }
+}
+
+void handlePlayKey(unsigned char key)
 {
     Cloth& cloth = g_app.cloth;
     Wind& wind = g_app.wind;
 
     switch (key) {
     case 27:
-        glutLeaveMainLoop();
+    case 't': case 'T':
+        showTitle();
+        break;
+    case ' ':
+        g_app.gripKeyHeld = true;
         break;
     case '1': case '2': case '3': case '4':
+        g_app.sandbox = true;
         wind.setPreset(key - '1');
-        break;
-    case 'f': case 'F':
-        glutFullScreenToggle();
         break;
     case 'p': case 'P':
         g_app.paused = !g_app.paused;
         break;
     case 'r': case 'R':
-        restartRun();
+        startRun();
+        break;
+    case 's': case 'S':
+        g_app.timeScale = g_app.timeScale < 1.0f ? 1.0f : kSlowMotionScale;
         break;
     case 'g': case 'G':
         wind.triggerGust();
         break;
     case 'w': case 'W':
         wind.setEnabled(!wind.enabled());
-        break;
-    case 'd': case 'D':
-        g_app.showDebug = !g_app.showDebug;
         break;
     case '+': case '=':
         cloth.setSolverIterations(cloth.solverIterations() + 1);
@@ -193,8 +271,49 @@ void onKeyboard(unsigned char key, int, int)
     }
 }
 
+void onKeyboard(unsigned char key, int, int)
+{
+    switch (key) {
+    case 'f': case 'F':
+        glutFullScreenToggle();
+        return;
+    case 'd': case 'D':
+        g_app.showDebug = !g_app.showDebug;
+        return;
+    case 'l': case 'L':
+        selectPattern(g_app.patternIndex + 1);
+        return;
+    default:
+        break;
+    }
+
+    switch (g_app.game.state()) {
+    case GameState::Title:   handleTitleKey(key); break;
+    case GameState::Playing: handlePlayKey(key); break;
+    case GameState::Results: handleResultsKey(key); break;
+    }
+}
+
+void onKeyboardUp(unsigned char key, int, int)
+{
+    if (key == ' ') {
+        g_app.gripKeyHeld = false;
+    }
+}
+
 void onSpecialKey(int key, int, int)
 {
+    if (g_app.game.state() == GameState::Title) {
+        switch (key) {
+        case GLUT_KEY_LEFT:  selectPattern(g_app.patternIndex - 1); break;
+        case GLUT_KEY_RIGHT: selectPattern(g_app.patternIndex + 1); break;
+        case GLUT_KEY_UP:    g_app.game.cycleDifficulty(-1); break;
+        case GLUT_KEY_DOWN:  g_app.game.cycleDifficulty(1); break;
+        default: break;
+        }
+        return;
+    }
+
     const float step = 0.08f;
     switch (key) {
     case GLUT_KEY_LEFT:  g_app.camera.rotate(step, 0.0f); break;
@@ -241,6 +360,7 @@ int main(int argc, char** argv)
     glutInitWindowPosition(100, 60);
     glutCreateWindow(kWindowTitle);
     glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS);
+    glutIgnoreKeyRepeat(1);
 
     printGlInfo();
     initScene();
@@ -248,6 +368,7 @@ int main(int argc, char** argv)
     glutDisplayFunc(onDisplay);
     glutReshapeFunc(onReshape);
     glutKeyboardFunc(onKeyboard);
+    glutKeyboardUpFunc(onKeyboardUp);
     glutSpecialFunc(onSpecialKey);
     glutMouseFunc(onMouse);
     glutMotionFunc(onMotion);

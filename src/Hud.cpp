@@ -2,7 +2,6 @@
 
 #include <GL/freeglut.h>
 #include <cstdio>
-#include <cstring>
 
 #include "App.h"
 
@@ -11,6 +10,10 @@ namespace {
 const int kMargin = 14;
 const int kLine = 18;
 const float kLoadBarMax = 2.0f;
+
+void* const kSmall = GLUT_BITMAP_HELVETICA_12;
+void* const kMedium = GLUT_BITMAP_HELVETICA_18;
+void* const kLarge = GLUT_BITMAP_TIMES_ROMAN_24;
 
 void beginOverlay(int width, int height)
 {
@@ -36,15 +39,20 @@ void endOverlay()
     glEnable(GL_DEPTH_TEST);
 }
 
-void text(int x, int y, const char* s, void* font = GLUT_BITMAP_HELVETICA_12)
+int textWidth(const char* s, void* font)
+{
+    return glutBitmapLength(font, reinterpret_cast<const unsigned char*>(s));
+}
+
+void text(int x, int y, const char* s, void* font = kSmall)
 {
     glRasterPos2i(x, y);
     glutBitmapString(font, reinterpret_cast<const unsigned char*>(s));
 }
 
-int textWidth(const char* s, void* font)
+void centeredText(int cx, int y, const char* s, void* font)
 {
-    return glutBitmapLength(font, reinterpret_cast<const unsigned char*>(s));
+    text(cx - textWidth(s, font) / 2, y, s, font);
 }
 
 void rect(float x, float y, float w, float h, float r, float g, float b, float a)
@@ -58,10 +66,15 @@ void rect(float x, float y, float w, float h, float r, float g, float b, float a
     glEnd();
 }
 
+void drawBar(float x, float y, float w, float h, float fill, float r, float g, float b)
+{
+    fill = fill < 0.0f ? 0.0f : (fill > 1.0f ? 1.0f : fill);
+    rect(x, y, w, h, 0.10f, 0.08f, 0.08f, 0.55f);
+    rect(x + 2, y + 2, (w - 4) * fill, h - 4, r, g, b, 0.95f);
+}
+
 void drawLoadBar(float x, float y, float w, float h, float load)
 {
-    rect(x, y, w, h, 0.10f, 0.08f, 0.08f, 0.55f);
-
     const float fill = load < kLoadBarMax ? load / kLoadBarMax : 1.0f;
     float r = 0.35f + 0.6f * fill;
     float g = 0.80f - 0.6f * fill;
@@ -69,23 +82,22 @@ void drawLoadBar(float x, float y, float w, float h, float load)
         r = 0.92f;
         g = 0.22f;
     }
-    rect(x + 2, y + 2, (w - 4) * fill, h - 4, r, g, 0.18f, 0.95f);
-
-    const float thresholdX = x + w / kLoadBarMax;
-    rect(thresholdX - 1, y - 3, 2, h + 6, 1.0f, 1.0f, 1.0f, 0.95f);
+    drawBar(x, y, w, h, fill, r, g, 0.18f);
+    rect(x + w / kLoadBarMax - 1, y - 3, 2, h + 6, 1.0f, 1.0f, 1.0f, 0.95f);
 }
 
-void drawMainPanel(const AppState& app)
+void drawPlayPanel(const AppState& app)
 {
+    const Game& game = app.game;
     const int top = app.windowHeight - kMargin - 12;
     char line[128];
 
-    rect(kMargin - 6, top - 5 * kLine - 4, 300, 5 * kLine + 22, 0.98f, 0.95f, 0.88f, 0.55f);
+    rect(kMargin - 6, top - 7 * kLine - 4, 300, 7 * kLine + 22, 0.98f, 0.95f, 0.88f, 0.55f);
     glColor3f(0.12f, 0.10f, 0.10f);
 
     const float speed = app.wind.speed();
     std::snprintf(line, sizeof(line), "Wind: %s  %.1f m/s (%.0f km/h)%s",
-                  app.wind.preset().name, speed, speed * 3.6f, app.wind.enabled() ? "" : "  [off]");
+                  app.wind.preset().name, speed, speed * 3.6f, app.sandbox ? "  [sandbox]" : "");
     text(kMargin, top, line);
 
     std::snprintf(line, sizeof(line), "Knot: %s   health %.0f%%", app.knot.status(), app.knot.health() * 100.0f);
@@ -97,9 +109,13 @@ void drawMainPanel(const AppState& app)
                   app.knot.load() * 100.0f, app.knot.strength());
     text(kMargin, top - 3 * kLine - 4, line);
 
-    std::snprintf(line, sizeof(line), "Survived: %.1f s   strongest gust %.1f m/s",
-                  app.survivalTime, app.wind.strongestGust());
-    text(kMargin, top - 4 * kLine - 4, line);
+    drawBar(kMargin, top - 4 * kLine - 10, 270, 12, game.gripStamina(), 0.30f, 0.55f, 0.90f);
+    glColor3f(0.12f, 0.10f, 0.10f);
+    text(kMargin, top - 5 * kLine - 8, game.gripping() ? "Grip: HOLDING THE KNOT!" : "Grip: hold SPACE to grab the knot");
+
+    std::snprintf(line, sizeof(line), "Survived: %.1f s   score %d   (%s)",
+                  game.survivalTime(), game.score(), game.difficulty().name);
+    text(kMargin, top - 6 * kLine - 8, line);
 }
 
 void drawDebugPanel(const AppState& app)
@@ -113,8 +129,9 @@ void drawDebugPanel(const AppState& app)
     rect(x - 8, top - 6 * kLine - 4, 330, 6 * kLine + 22, 0.05f, 0.05f, 0.08f, 0.55f);
     glColor3f(0.95f, 0.95f, 0.90f);
 
-    std::snprintf(line, sizeof(line), "FPS %.0f (%.2f ms)   substeps %d%s",
-                  app.fps.fps(), app.fps.frameTimeMs(), app.substepsLastFrame, app.paused ? "   PAUSED" : "");
+    std::snprintf(line, sizeof(line), "FPS %.0f (%.2f ms)   substeps %d%s%s",
+                  app.fps.fps(), app.fps.frameTimeMs(), app.substepsLastFrame,
+                  app.paused ? "   PAUSED" : "", app.timeScale < 1.0f ? "   SLOW-MO" : "");
     text(x, top, line);
     std::snprintf(line, sizeof(line), "Particles %d   constraints %d", cloth.particleCount(), cloth.constraintCount());
     text(x, top - kLine, line);
@@ -129,22 +146,96 @@ void drawDebugPanel(const AppState& app)
     text(x, top - 5 * kLine, line);
 }
 
+void drawAnnouncement(const AppState& app)
+{
+    const float alpha = app.game.announcementAlpha();
+    if (alpha <= 0.0f) {
+        return;
+    }
+    const char* s = app.game.announcement();
+    const int cx = app.windowWidth / 2;
+    const int y = app.windowHeight - 90;
+    const int w = textWidth(s, kLarge) + 40;
+    rect(cx - w / 2.0f, y - 14, w, 44, 0.12f, 0.10f, 0.16f, 0.6f * alpha);
+    glColor4f(1.0f, 0.88f, 0.55f, alpha);
+    centeredText(cx, y, s, kLarge);
+}
+
 void drawFailureBanner(const AppState& app)
 {
-    void* big = GLUT_BITMAP_TIMES_ROMAN_24;
-    char line[128];
-    std::snprintf(line, sizeof(line), "THE KNOT GAVE UP!  You survived %.1f seconds.", app.survivalTime);
-    const char* hint = "Press R to tie the lungi again";
-
     const int cx = app.windowWidth / 2;
     const int cy = app.windowHeight / 2 + 120;
-    const int w = textWidth(line, big) + 40;
-    rect(cx - w / 2.0f, cy - 34, w, 70, 0.98f, 0.93f, 0.80f, 0.85f);
+    const char* s = "!!  THE KNOT GAVE UP  !!";
+    const int w = textWidth(s, kLarge) + 50;
+    rect(cx - w / 2.0f, cy - 16, w, 48, 0.98f, 0.93f, 0.80f, 0.9f);
+    glColor3f(0.70f, 0.12f, 0.10f);
+    centeredText(cx, cy, s, kLarge);
+}
+
+int leftPanelCenter(const AppState& app)
+{
+    const int cx = app.windowWidth / 4;
+    return cx < 310 ? 310 : cx;
+}
+
+void drawTitle(const AppState& app)
+{
+    const int cx = leftPanelCenter(app);
+    const int top = app.windowHeight - 110;
+    char line[128];
+
+    rect(cx - 280, top - 250, 560, 300, 0.98f, 0.94f, 0.85f, 0.82f);
+
+    glColor3f(0.55f, 0.16f, 0.12f);
+    centeredText(cx, top, "LUNGI DYNAMICS", kLarge);
+    glColor3f(0.25f, 0.20f, 0.18f);
+    centeredText(cx, top - 28, "A Kalboishakhi Survival Simulator", kMedium);
+
+    std::snprintf(line, sizeof(line), "Difficulty:  <  %s  >      (Up / Down)", app.game.difficulty().name);
+    centeredText(cx, top - 80, line, kMedium);
+    std::snprintf(line, sizeof(line), "Lungi:  <  %s  >      (Left / Right)", app.patterns[app.patternIndex].name);
+    centeredText(cx, top - 110, line, kMedium);
+
+    glColor3f(0.55f, 0.16f, 0.12f);
+    centeredText(cx, top - 160, "Press ENTER to face the storm", kLarge);
+    glColor3f(0.25f, 0.20f, 0.18f);
+    centeredText(cx, top - 195, "In the storm, hold SPACE to grab the knot. Grip runs out, so save it for the gusts!", kSmall);
+    centeredText(cx, top - 215, "Esc: quit", kSmall);
+}
+
+void drawResults(const AppState& app)
+{
+    const Game& game = app.game;
+    const int cx = leftPanelCenter(app);
+    const int top = app.windowHeight - 120;
+    char line[160];
+
+    rect(cx - 300, top - 300, 600, 350, 0.98f, 0.94f, 0.85f, 0.88f);
 
     glColor3f(0.70f, 0.12f, 0.10f);
-    text(cx - textWidth(line, big) / 2, cy + 6, line, big);
+    centeredText(cx, top, "!!  THE KNOT GAVE UP  !!", kLarge);
+
     glColor3f(0.20f, 0.16f, 0.14f);
-    text(cx - textWidth(hint, GLUT_BITMAP_HELVETICA_18) / 2, cy - 22, hint, GLUT_BITMAP_HELVETICA_18);
+    std::snprintf(line, sizeof(line), "Survived: %.1f s", game.survivalTime());
+    centeredText(cx, top - 45, line, kMedium);
+    std::snprintf(line, sizeof(line), "Strongest gust survived: %.1f m/s (%.0f km/h)",
+                  game.strongestGustSurvived(), game.strongestGustSurvived() * 3.6f);
+    centeredText(cx, top - 70, line, kMedium);
+    std::snprintf(line, sizeof(line), "Lungi displacement penalty: -%.0f", game.displacementPenalty());
+    centeredText(cx, top - 95, line, kMedium);
+    std::snprintf(line, sizeof(line), "Difficulty: %s (x%.1f)", game.difficulty().name, game.difficulty().scoreMultiplier);
+    centeredText(cx, top - 120, line, kMedium);
+
+    glColor3f(0.12f, 0.30f, 0.20f);
+    std::snprintf(line, sizeof(line), "Lungi Survival Score: %d", game.score());
+    centeredText(cx, top - 165, line, kLarge);
+    glColor3f(0.55f, 0.16f, 0.12f);
+    centeredText(cx, top - 200, game.tier().name, kLarge);
+    glColor3f(0.25f, 0.20f, 0.18f);
+    std::snprintf(line, sizeof(line), "\"%s\"", game.tierMessage());
+    centeredText(cx, top - 230, line, kMedium);
+
+    centeredText(cx, top - 280, "ENTER: play again      T: title screen", kSmall);
 }
 
 } // namespace
@@ -155,17 +246,25 @@ void draw(const AppState& app)
 {
     beginOverlay(app.windowWidth, app.windowHeight);
 
-    drawMainPanel(app);
+    const GameState state = app.game.state();
+    if (state == GameState::Title) {
+        drawTitle(app);
+    } else if (state == GameState::Playing) {
+        drawPlayPanel(app);
+        drawAnnouncement(app);
+        if (app.knot.failed()) {
+            drawFailureBanner(app);
+        }
+        glColor3f(0.12f, 0.10f, 0.10f);
+        text(kMargin, kMargin,
+             "SPACE: grip   L: lungi   S: slow-mo   P: pause   R: restart   T: title   1-4: sandbox wind   D: debug   Drag/wheel: camera");
+    } else {
+        drawResults(app);
+    }
+
     if (app.showDebug) {
         drawDebugPanel(app);
     }
-    if (app.knot.failed()) {
-        drawFailureBanner(app);
-    }
-
-    glColor3f(0.12f, 0.10f, 0.10f);
-    text(kMargin, kMargin,
-         "1-4: wind   G: gust   W: wind on/off   R: retie   P: pause   D: debug   +/-: iterations   Drag/wheel: camera");
 
     endOverlay();
 }

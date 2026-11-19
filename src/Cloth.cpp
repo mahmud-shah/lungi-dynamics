@@ -20,8 +20,8 @@ const float kGatherWidth = 0.5f;
 const float kLungiMass = 0.5f;
 const float kAirDragCoefficient = 0.6f;
 
-constexpr Vec3 kOutsideColor(0.20f, 0.38f, 0.56f);
-constexpr Vec3 kInsideColor(0.13f, 0.25f, 0.38f);
+const float kPatternTileMetres = 0.32f;
+const float kInsideShade = 0.7f;
 
 float smoothstep01(float t)
 {
@@ -30,11 +30,6 @@ float smoothstep01(float t)
 }
 
 } // namespace
-
-Vec3 Cloth::outsideColor()
-{
-    return kOutsideColor;
-}
 
 // The worn shape follows the Bangladeshi way of tying: the tube is wider than
 // the waist, so the extra cloth is pulled to the front, crossed and tucked.
@@ -150,8 +145,7 @@ void Cloth::buildTube(const TubeShape& shape)
     }
     forces_.resize(count);
     normals_.resize(count);
-    outsideCoords_.resize(count);
-    insideCoords_.resize(count);
+    buildRenderMesh();
 
     reset();
 }
@@ -387,38 +381,112 @@ void Cloth::updateNormals()
     }
 }
 
-// Two-sided lighting: the outside is drawn with back faces culled and the
-// normal as computed; the inside is drawn with front faces culled and the
-// normal flipped, so the inner surface is lit from its own side.
-void Cloth::draw(const ToonRamp& ramp, const Vec3& lightDir, float brightness)
+// The render mesh has one extra column: a copy of column 0 placed after the
+// last column. Its texture u is 1 full turn instead of 0, so the pattern
+// wraps around the tube without being squeezed backwards across the seam.
+// The pattern repeats a whole number of times around, so the seam is invisible.
+void Cloth::buildRenderMesh()
 {
-    updateNormals();
-    for (size_t i = 0; i < normals_.size(); ++i) {
-        outsideCoords_[i] = ToonRamp::coordinate(normals_[i], lightDir);
-        insideCoords_[i] = ToonRamp::coordinate(-normals_[i], lightDir);
+    const int renderCols = cols_ + 1;
+    const Vec3 rim = naturalPositions_[index(0, 0)];
+    const float flatRadius = std::sqrt(rim.x * rim.x + rim.z * rim.z);
+    const float repeatsAround = std::max(1.0f, std::round(6.2831853f * flatRadius / kPatternTileMetres));
+
+    renderPositions_.resize(renderCols * rows_);
+    renderUVs_.resize(renderCols * rows_ * 2);
+    outsideCoords_.resize(renderCols * rows_);
+    insideCoords_.resize(renderCols * rows_);
+
+    for (int row = 0; row < rows_; ++row) {
+        for (int col = 0; col < renderCols; ++col) {
+            const int r = row * renderCols + col;
+            renderUVs_[r * 2 + 0] = repeatsAround * col / cols_;
+            renderUVs_[r * 2 + 1] = tetherLength_[index(col, row)] / kPatternTileMetres;
+        }
     }
 
+    renderIndices_.clear();
+    for (int row = 0; row + 1 < rows_; ++row) {
+        for (int col = 0; col < cols_; ++col) {
+            const unsigned int a = row * renderCols + col;
+            const unsigned int b = a + 1;
+            const unsigned int c = a + renderCols;
+            const unsigned int d = c + 1;
+            renderIndices_.push_back(a);
+            renderIndices_.push_back(b);
+            renderIndices_.push_back(c);
+            renderIndices_.push_back(b);
+            renderIndices_.push_back(d);
+            renderIndices_.push_back(c);
+        }
+    }
+}
+
+// Pass 1 draws the fabric pattern. Pass 2 draws the same triangles again with
+// the toon ramp and multiplies it onto the pattern (blend = dst * src), with
+// depth test EQUAL so only the pixels from pass 1 are touched. This gives a
+// patterned cloth with cel-shaded lighting using only OpenGL 1.1 features.
+void Cloth::drawSide(const ToonRamp& ramp, const FabricTexture& fabric, const std::vector<float>& rampCoords,
+                     float shade, float brightness)
+{
+    const GLsizei indexCount = static_cast<GLsizei>(renderIndices_.size());
+
+    fabric.bind();
+    glColor3f(shade * brightness, shade * brightness, shade * brightness);
+    glTexCoordPointer(2, GL_FLOAT, 0, renderUVs_.data());
+    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, renderIndices_.data());
+    fabric.unbind();
+
+    const GLboolean fogWasOn = glIsEnabled(GL_FOG);
+    glDisable(GL_FOG);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_DST_COLOR, GL_ZERO);
+    glDepthFunc(GL_EQUAL);
+    glDepthMask(GL_FALSE);
+
     ramp.bind();
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glTexCoordPointer(1, GL_FLOAT, 0, rampCoords.data());
+    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, renderIndices_.data());
+    ramp.unbind();
+
+    glDepthMask(GL_TRUE);
+    glDepthFunc(GL_LESS);
+    glDisable(GL_BLEND);
+    if (fogWasOn) {
+        glEnable(GL_FOG);
+    }
+}
+
+// Two-sided lighting: the outside is drawn with back faces culled and the
+// normal as computed; the inside is drawn with front faces culled, the
+// normal flipped and the cloth a little darker.
+void Cloth::draw(const ToonRamp& ramp, const FabricTexture& fabric, const Vec3& lightDir, float brightness)
+{
+    updateNormals();
+    const int renderCols = cols_ + 1;
+    for (int row = 0; row < rows_; ++row) {
+        for (int col = 0; col < renderCols; ++col) {
+            const int sim = index(col, row);
+            const int r = row * renderCols + col;
+            renderPositions_[r] = positions_[sim];
+            outsideCoords_[r] = ToonRamp::coordinate(normals_[sim], lightDir);
+            insideCoords_[r] = ToonRamp::coordinate(-normals_[sim], lightDir);
+        }
+    }
+
     glEnable(GL_CULL_FACE);
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    glVertexPointer(3, GL_FLOAT, sizeof(Vec3), &positions_[0].x);
-
-    const GLsizei indexCount = static_cast<GLsizei>(indices_.size());
+    glVertexPointer(3, GL_FLOAT, sizeof(Vec3), &renderPositions_[0].x);
 
     glCullFace(GL_BACK);
-    glColor3f(kOutsideColor.x * brightness, kOutsideColor.y * brightness, kOutsideColor.z * brightness);
-    glTexCoordPointer(1, GL_FLOAT, 0, outsideCoords_.data());
-    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, indices_.data());
-
+    drawSide(ramp, fabric, outsideCoords_, 1.0f, brightness);
     glCullFace(GL_FRONT);
-    glColor3f(kInsideColor.x * brightness, kInsideColor.y * brightness, kInsideColor.z * brightness);
-    glTexCoordPointer(1, GL_FLOAT, 0, insideCoords_.data());
-    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, indices_.data());
+    drawSide(ramp, fabric, insideCoords_, kInsideShade, brightness);
 
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
     glDisableClientState(GL_VERTEX_ARRAY);
     glCullFace(GL_BACK);
     glDisable(GL_CULL_FACE);
-    ramp.unbind();
 }

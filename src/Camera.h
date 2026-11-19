@@ -12,6 +12,7 @@ public:
     void endDrag();
     void rotate(float deltaYaw, float deltaPitch);
     void zoom(int steps);
+    void faceFront();
 
     Vec3 eye() const;
 

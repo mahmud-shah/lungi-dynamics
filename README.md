@@ -10,15 +10,26 @@ lungi fabric, and my image-processing code turns it into the cloth texture.
 
 ## Status
 
-Work in progress. Current milestone: the knot and the Kalboishakhi wind.
+Work in progress. Current milestone: the playable game and the lungi patterns.
 
-The lungi is tied the Bangladeshi way. The tube is wider than the waist, so the
-extra cloth is gathered at the front, the top edge is rolled down into a thick
-band, and a twisted fold is tucked in at the front. Gusting wind pushes on every
-cloth triangle, and the knot measures the force it has to hold. When the load
-stays above its strength, the roll unrolls, the twist slips out and the
-waistline slides down, until the lungi comes off. The character wears
-three-quarter pants underneath.
+The game starts on a title screen where I pick a difficulty and one of five
+woven lungi patterns. The storm then builds up on its own, from a calm
+Boishakh afternoon to Nor'wester Mode. Holding Space makes the character grab
+the knot, which makes it 60% stronger, but grip stamina runs out, so it has to
+be saved for the big gusts. When the knot gives up, a results screen shows the
+Lungi Survival Score and a score tier.
+
+The lungi is tied the Bangladeshi way: the extra cloth is gathered at the
+front, the top edge is rolled into a band, and a double twist is tucked in.
+When the knot is overloaded, the roll unrolls, the twist slips out and the
+waistline slides down. The character wears three-quarter pants underneath.
+
+### Score
+
+Lungi Survival Score = (10 x seconds survived + 4 x strongest gust survived in
+m/s - lungi displacement penalty) x difficulty multiplier (Easy 0.8, Normal 1.0,
+Hard 1.3). Tiers: Lungi Newbie (below 300), Gaye Joth Ase (300+),
+Kalboishakhi Warrior (450+), Lungi Legend (600+).
 
 ## Features (planned)
 
@@ -32,19 +43,23 @@ three-quarter pants underneath.
 
 ## Controls
 
-| Key | Action |
-|-----|--------|
-| 1 / 2 / 3 / 4 | Wind preset: Mridu Batash, Jhor Asche!, Kalboishakhi, Nor'wester Mode |
-| G | Send a gust now |
-| W | Wind on / off |
-| R | Retie the lungi and restart the timer |
-| P | Pause physics |
-| D | Debug panel (FPS, particles, wind vector, knot force, stretch) |
-| + / - | More / fewer solver iterations |
-| Mouse drag / arrow keys | Orbit the camera |
-| Mouse wheel | Zoom |
-| F | Toggle fullscreen |
-| Esc | Quit |
+| Key | Title screen | In the storm |
+|-----|--------------|--------------|
+| Enter | Start | - |
+| Up / Down | Difficulty | Orbit camera |
+| Left / Right | Lungi pattern | Orbit camera |
+| Space | Start | Hold to grab the knot |
+| L | Next lungi pattern | Next lungi pattern |
+| S | - | Slow motion on / off |
+| P | - | Pause |
+| R | - | Restart the run |
+| T / Esc | Quit (Esc) | Back to title |
+| 1 / 2 / 3 / 4 | - | Sandbox: fix the wind preset |
+| G / W | - | Send a gust / wind on-off |
+| + / - | - | More / fewer solver iterations |
+| D | Debug panel | Debug panel |
+| F | Fullscreen | Fullscreen |
+| Mouse drag / wheel | Camera | Camera |
 
 ## How to build (Code::Blocks + MinGW-w64)
 
