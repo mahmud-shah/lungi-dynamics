@@ -10,7 +10,8 @@ lungi fabric, and my image-processing code turns it into the cloth texture.
 
 ## Status
 
-Work in progress. Current milestone: project setup and first window.
+Work in progress. Current milestone: orbit camera, painted sky, toon shading
+and a first cloth test (a sheet hanging on a clothes line).
 
 ## Features (planned)
 
@@ -26,8 +27,15 @@ Work in progress. Current milestone: project setup and first window.
 
 | Key | Action |
 |-----|--------|
+| Mouse drag / arrow keys | Orbit the camera |
+| Mouse wheel | Zoom |
+| G | Push the cloth with a gust |
+| R | Reset the cloth |
+| P | Pause physics |
+| + / - | More / fewer solver iterations |
+| [ / ] | Calmer / stormier sky |
+| F | Toggle fullscreen |
 | Esc | Quit |
-| F   | Toggle fullscreen |
 
 ## How to build (Code::Blocks + MinGW-w64)
 

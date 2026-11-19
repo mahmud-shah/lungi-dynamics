@@ -7,8 +7,6 @@ FpsCounter::FpsCounter(double windowSeconds)
 
 void FpsCounter::registerFrame(double nowSeconds)
 {
-    // The first frame only opens the window; frames are counted as the
-    // intervals that end after it.
     if (windowStart_ < 0.0) {
         windowStart_ = nowSeconds;
         framesInWindow_ = 0;

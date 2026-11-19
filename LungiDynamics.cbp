@@ -49,11 +49,22 @@
 			<Add directory="third_party/freeglut/lib" />
 		</Linker>
 		<Unit filename="src/App.h" />
+		<Unit filename="src/Camera.cpp" />
+		<Unit filename="src/Camera.h" />
 		<Unit filename="src/Clock.h" />
+		<Unit filename="src/Cloth.cpp" />
+		<Unit filename="src/Cloth.h" />
+		<Unit filename="src/Environment.cpp" />
+		<Unit filename="src/Environment.h" />
 		<Unit filename="src/FpsCounter.cpp" />
 		<Unit filename="src/FpsCounter.h" />
 		<Unit filename="src/GlCheck.h" />
 		<Unit filename="src/StbImageImpl.cpp" />
+		<Unit filename="src/TestSphere.cpp" />
+		<Unit filename="src/TestSphere.h" />
+		<Unit filename="src/ToonRamp.cpp" />
+		<Unit filename="src/ToonRamp.h" />
+		<Unit filename="src/Vec3.h" />
 		<Unit filename="src/main.cpp" />
 		<Extensions />
 	</Project>
