@@ -10,10 +10,15 @@ lungi fabric, and my image-processing code turns it into the cloth texture.
 
 ## Status
 
-Work in progress. Current milestone: the knot and the Kalboishakhi wind. The
-lungi is held by a knot at the waist. Gusting wind pushes on every cloth
-triangle, the knot measures the force it has to hold, and when the load stays
-above its strength for too long the knot gives up.
+Work in progress. Current milestone: the knot and the Kalboishakhi wind.
+
+The lungi is tied the Bangladeshi way. The tube is wider than the waist, so the
+extra cloth is gathered at the front, the top edge is rolled down into a thick
+band, and a twisted fold is tucked in at the front. Gusting wind pushes on every
+cloth triangle, and the knot measures the force it has to hold. When the load
+stays above its strength, the roll unrolls, the twist slips out and the
+waistline slides down, until the lungi comes off. The character wears
+three-quarter pants underneath.
 
 ## Features (planned)
 

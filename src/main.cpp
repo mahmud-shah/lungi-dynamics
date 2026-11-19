@@ -21,7 +21,7 @@ constexpr Vec3 kGravity(0.0f, -9.81f, 0.0f);
 
 const int kLungiAround = 40;
 const int kLungiDown = 30;
-const float kLungiHemRadius = 0.29f;
+const float kLungiFlatRadius = 0.30f;
 const float kLungiLength = 0.84f;
 
 const float kStormEaseRate = 0.8f;
@@ -51,7 +51,7 @@ void initScene()
     g_app.toonRamp.create();
     const Body& body = g_app.body;
     g_app.cloth.buildTube(TubeShape{body.waistCenter(), body.waistRadiusX(), body.waistRadiusZ(),
-                                    kLungiHemRadius, kLungiLength, kLungiAround, kLungiDown});
+                                    kLungiFlatRadius, kLungiLength, kLungiAround, kLungiDown});
     restartRun();
     g_app.lastFrameTime = Clock::nowSeconds();
     glCheck("initScene");
@@ -126,6 +126,10 @@ void onDisplay()
     env.drawGround();
     g_app.body.draw(g_app.toonRamp, env.lightDir(), env.brightness());
     g_app.cloth.draw(g_app.toonRamp, env.lightDir(), env.brightness());
+    const Body& body = g_app.body;
+    const WaistBand band{body.waistCenter() - Vec3(0.0f, g_app.knot.waistDrop(), 0.0f),
+                         body.waistRadiusX(), body.waistRadiusZ()};
+    g_app.knot.draw(band, Cloth::outsideColor(), g_app.toonRamp, env.lightDir(), env.brightness());
     g_app.wind.drawStreaks(env.brightness());
     glDisable(GL_FOG);
 

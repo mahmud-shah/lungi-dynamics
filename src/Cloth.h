@@ -12,7 +12,7 @@ struct TubeShape {
     Vec3 waistCenter;
     float waistRadiusX;
     float waistRadiusZ;
-    float hemRadius;
+    float flatRadius;
     float length;
     int around;
     int down;
@@ -24,6 +24,7 @@ public:
     void reset();
 
     void step(float dt, const Vec3& gravity, const Body& body, const Wind& wind);
+    static Vec3 outsideColor();
     void releaseKnot();
     bool knotAttached() const { return knotAttached_; }
     void setWaistDrop(float metres) { waistDrop_ = metres; }
@@ -71,6 +72,7 @@ private:
     float knotLoad_ = 0.0f;
 
     std::vector<Vec3> restPositions_;
+    std::vector<Vec3> naturalPositions_;
     std::vector<Vec3> positions_;
     std::vector<Vec3> predicted_;
     std::vector<Vec3> velocities_;

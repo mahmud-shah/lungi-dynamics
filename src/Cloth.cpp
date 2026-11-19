@@ -13,35 +13,91 @@ const float kStructuralStiffness = 1.0f;
 const float kShearStiffness = 0.8f;
 const float kBendStiffness = 0.15f;
 const int kFlareRows = 4;
+const int kGatherRows = 10;
+const float kFrontAngle = 1.5707963f;
+const float kGatherAmount = 0.75f;
+const float kGatherWidth = 0.5f;
 const float kLungiMass = 0.5f;
 const float kAirDragCoefficient = 0.6f;
 
 constexpr Vec3 kOutsideColor(0.20f, 0.38f, 0.56f);
 constexpr Vec3 kInsideColor(0.13f, 0.25f, 0.38f);
 
+float smoothstep01(float t)
+{
+    t = clamp01(t);
+    return t * t * (3.0f - 2.0f * t);
+}
+
 } // namespace
 
+Vec3 Cloth::outsideColor()
+{
+    return kOutsideColor;
+}
+
+// The worn shape follows the Bangladeshi way of tying: the tube is wider than
+// the waist, so the extra cloth is pulled to the front, crossed and tucked.
+// Here that is modelled by spacing the waist particles unevenly, with many of
+// them bunched at the front, and by giving the constraints the rest lengths
+// of the flat, unworn tube. The cloth near the front waist is therefore
+// compressed and buckles into folds by itself.
 void Cloth::buildTube(const TubeShape& shape)
 {
     cols_ = shape.around;
     rows_ = shape.down;
     const int count = cols_ * rows_;
-    const float pi = 3.14159265f;
+    const float twoPi = 6.2831853f;
 
     restPositions_.resize(count);
+    naturalPositions_.resize(count);
     inverseMass_.assign(count, 1.0f);
 
+    std::vector<float> density(cols_);
+    float densitySum = 0.0f;
+    for (int col = 0; col < cols_; ++col) {
+        float offset = twoPi * col / cols_ - kFrontAngle;
+        offset = std::atan2(std::sin(offset), std::cos(offset));
+        density[col] = 1.0f - kGatherAmount * std::exp(-(offset * offset) / (kGatherWidth * kGatherWidth));
+        densitySum += density[col];
+    }
+
+    std::vector<float> waistAngle(cols_);
+    float cumulative = 0.0f;
+    for (int col = 0; col < cols_; ++col) {
+        waistAngle[col] = twoPi * cumulative / densitySum;
+        cumulative += density[col];
+    }
+
     for (int row = 0; row < rows_; ++row) {
-        const float flare = std::min(1.0f, static_cast<float>(row) / kFlareRows);
-        const float s = flare * flare * (3.0f - 2.0f * flare);
-        const float rx = shape.waistRadiusX + (shape.hemRadius - shape.waistRadiusX) * s;
-        const float rz = shape.waistRadiusZ + (shape.hemRadius - shape.waistRadiusZ) * s;
+        const float flare = smoothstep01(static_cast<float>(row) / kFlareRows);
+        const float ungather = smoothstep01(static_cast<float>(row) / kGatherRows);
         const float y = shape.waistCenter.y - shape.length * row / (rows_ - 1);
 
         for (int col = 0; col < cols_; ++col) {
-            const float theta = 2.0f * pi * col / cols_;
+            const float flatAngle = twoPi * col / cols_;
+            const float theta = waistAngle[col] + (flatAngle - waistAngle[col]) * ungather;
+            const float rx = shape.waistRadiusX + (shape.flatRadius - shape.waistRadiusX) * flare;
+            const float rz = shape.waistRadiusZ + (shape.flatRadius - shape.waistRadiusZ) * flare;
             restPositions_[index(col, row)] = Vec3(shape.waistCenter.x + std::cos(theta) * rx, y,
                                                    shape.waistCenter.z + std::sin(theta) * rz);
+        }
+    }
+
+    tetherLength_.assign(count, 0.0f);
+    for (int row = 1; row < rows_; ++row) {
+        for (int col = 0; col < cols_; ++col) {
+            const float segment = length(restPositions_[index(col, row)] - restPositions_[index(col, row - 1)]);
+            tetherLength_[index(col, row)] = tetherLength_[index(col, row - 1)] + segment;
+        }
+    }
+
+    for (int row = 0; row < rows_; ++row) {
+        for (int col = 0; col < cols_; ++col) {
+            const float flatAngle = twoPi * col / cols_;
+            naturalPositions_[index(col, row)] = Vec3(std::cos(flatAngle) * shape.flatRadius,
+                                                      -tetherLength_[index(col, row)],
+                                                      std::sin(flatAngle) * shape.flatRadius);
         }
     }
 
@@ -88,14 +144,6 @@ void Cloth::buildTube(const TubeShape& shape)
         }
     }
 
-    tetherLength_.assign(count, 0.0f);
-    for (int row = 1; row < rows_; ++row) {
-        for (int col = 0; col < cols_; ++col) {
-            const float segment = length(restPositions_[index(col, row)] - restPositions_[index(col, row - 1)]);
-            tetherLength_[index(col, row)] = tetherLength_[index(col, row - 1)] + segment;
-        }
-    }
-
     particleMass_ = kLungiMass / count;
     for (int col = 0; col < cols_; ++col) {
         inverseMass_[index(col, 0)] = 0.0f;
@@ -110,7 +158,7 @@ void Cloth::buildTube(const TubeShape& shape)
 
 void Cloth::addConstraint(int a, int b, float stiffness)
 {
-    constraints_.push_back({a, b, length(restPositions_[a] - restPositions_[b]), stiffness});
+    constraints_.push_back({a, b, length(naturalPositions_[a] - naturalPositions_[b]), stiffness});
 }
 
 void Cloth::reset()
@@ -299,6 +347,9 @@ float Cloth::maxStretch() const
     float worst = 0.0f;
     for (int i = 0; i < structuralCount_; ++i) {
         const DistanceConstraint& c = constraints_[i];
+        if (inverseMass_[c.a] == 0.0f && inverseMass_[c.b] == 0.0f) {
+            continue;
+        }
         worst = std::max(worst, length(positions_[c.a] - positions_[c.b]) / c.restLength - 1.0f);
     }
     return worst;
@@ -307,11 +358,16 @@ float Cloth::maxStretch() const
 float Cloth::meanStretch() const
 {
     float total = 0.0f;
+    int counted = 0;
     for (int i = 0; i < structuralCount_; ++i) {
         const DistanceConstraint& c = constraints_[i];
-        total += length(positions_[c.a] - positions_[c.b]) / c.restLength - 1.0f;
+        if (inverseMass_[c.a] == 0.0f && inverseMass_[c.b] == 0.0f) {
+            continue;
+        }
+        total += std::max(0.0f, length(positions_[c.a] - positions_[c.b]) / c.restLength - 1.0f);
+        ++counted;
     }
-    return structuralCount_ > 0 ? total / structuralCount_ : 0.0f;
+    return counted > 0 ? total / counted : 0.0f;
 }
 
 void Cloth::updateNormals()

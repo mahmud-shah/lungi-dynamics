@@ -8,7 +8,7 @@ namespace {
 
 constexpr Vec3 kSkin(0.96f, 0.76f, 0.58f);
 constexpr Vec3 kVest(0.95f, 0.93f, 0.86f);
-constexpr Vec3 kShorts(0.98f, 0.76f, 0.22f);
+constexpr Vec3 kPants(0.33f, 0.42f, 0.27f);
 constexpr Vec3 kHair(0.16f, 0.12f, 0.10f);
 constexpr Vec3 kEye(0.10f, 0.08f, 0.08f);
 
@@ -19,9 +19,11 @@ const int kHemisphereStacks = 8;
 
 Body::Body()
 {
-    addCapsule(Vec3(-0.11f, 0.86f, 0.0f), Vec3(-0.11f, 0.10f, 0.0f), 0.085f, kSkin, true);
-    addCapsule(Vec3(0.11f, 0.86f, 0.0f), Vec3(0.11f, 0.10f, 0.0f), 0.085f, kSkin, true);
-    addCapsule(Vec3(-0.10f, 0.86f, 0.0f), Vec3(0.10f, 0.86f, 0.0f), 0.15f, kShorts, true);
+    addCapsule(Vec3(-0.11f, 0.86f, 0.0f), Vec3(-0.11f, 0.37f, 0.0f), 0.095f, kPants, true);
+    addCapsule(Vec3(0.11f, 0.86f, 0.0f), Vec3(0.11f, 0.37f, 0.0f), 0.095f, kPants, true);
+    addCapsule(Vec3(-0.11f, 0.38f, 0.0f), Vec3(-0.11f, 0.10f, 0.0f), 0.078f, kSkin, true);
+    addCapsule(Vec3(0.11f, 0.38f, 0.0f), Vec3(0.11f, 0.10f, 0.0f), 0.078f, kSkin, true);
+    addCapsule(Vec3(-0.10f, 0.86f, 0.0f), Vec3(0.10f, 0.86f, 0.0f), 0.15f, kPants, true);
     addCapsule(Vec3(0.0f, 0.98f, 0.0f), Vec3(0.0f, 1.32f, 0.0f), 0.21f, kVest, true);
     addCapsule(Vec3(-0.27f, 1.36f, 0.0f), Vec3(-0.41f, 1.02f, 0.06f), 0.06f, kSkin, true);
     addCapsule(Vec3(0.27f, 1.36f, 0.0f), Vec3(0.41f, 1.02f, 0.06f), 0.06f, kSkin, true);
@@ -31,8 +33,8 @@ Body::Body()
     addCapsule(Vec3(0.08f, 1.69f, 0.205f), Vec3(0.08f, 1.69f, 0.205f), 0.028f, kEye, false);
 
     waistCenter_ = Vec3(0.0f, 0.95f, 0.0f);
-    waistRadiusX_ = 0.32f;
-    waistRadiusZ_ = 0.245f;
+    waistRadiusX_ = 0.27f;
+    waistRadiusZ_ = 0.235f;
 }
 
 void Body::addCapsule(const Vec3& a, const Vec3& b, float radius, const Vec3& color, bool collides)
