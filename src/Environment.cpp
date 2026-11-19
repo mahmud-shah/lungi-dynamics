@@ -8,8 +8,8 @@ namespace {
 const int kGroundTiles = 24;
 const float kTileSize = 2.0f;
 
-const Vec3 kGrassGreen(0.45f, 0.58f, 0.28f);
-const Vec3 kRiceGold(0.66f, 0.64f, 0.33f);
+constexpr Vec3 kGrassGreen(0.45f, 0.58f, 0.28f);
+constexpr Vec3 kRiceGold(0.66f, 0.64f, 0.33f);
 
 float hash2(int i, int j)
 {

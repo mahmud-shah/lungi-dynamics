@@ -11,8 +11,8 @@ const float kShadowEdge = -0.05f;
 const float kLitEdge = 0.45f;
 const float kEdgeSoftness = 0.03f;
 
-const Vec3 kShadowTint(0.80f, 0.82f, 1.00f);
-const Vec3 kLightTint(1.00f, 0.96f, 0.88f);
+constexpr Vec3 kShadowTint(0.80f, 0.82f, 1.00f);
+constexpr Vec3 kLightTint(1.00f, 0.96f, 0.88f);
 
 float smoothstep(float edge0, float edge1, float x)
 {

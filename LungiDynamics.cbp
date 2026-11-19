@@ -62,11 +62,17 @@
 		<Unit filename="src/FpsCounter.cpp" />
 		<Unit filename="src/FpsCounter.h" />
 		<Unit filename="src/GlCheck.h" />
+		<Unit filename="src/Hud.cpp" />
+		<Unit filename="src/Hud.h" />
+		<Unit filename="src/Knot.cpp" />
+		<Unit filename="src/Knot.h" />
+		<Unit filename="src/main.cpp" />
 		<Unit filename="src/StbImageImpl.cpp" />
-				<Unit filename="src/ToonRamp.cpp" />
+		<Unit filename="src/ToonRamp.cpp" />
 		<Unit filename="src/ToonRamp.h" />
 		<Unit filename="src/Vec3.h" />
-		<Unit filename="src/main.cpp" />
+		<Unit filename="src/Wind.cpp" />
+		<Unit filename="src/Wind.h" />
 		<Extensions />
 	</Project>
 </CodeBlocks_project_file>

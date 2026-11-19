@@ -6,6 +6,7 @@
 #include "Vec3.h"
 
 class Body;
+class Wind;
 
 struct TubeShape {
     Vec3 waistCenter;
@@ -22,8 +23,11 @@ public:
     void buildTube(const TubeShape& shape);
     void reset();
 
-    void step(float dt, const Vec3& gravity, const Body& body);
-    void applyGust(const Vec3& deltaVelocity);
+    void step(float dt, const Vec3& gravity, const Body& body, const Wind& wind);
+    void releaseKnot();
+    bool knotAttached() const { return knotAttached_; }
+    void setWaistDrop(float metres) { waistDrop_ = metres; }
+    float knotLoad() const { return knotLoad_; }
     void draw(const ToonRamp& ramp, const Vec3& lightDir, float brightness);
 
     void setSolverIterations(int iterations);
@@ -33,6 +37,7 @@ public:
     int constraintCount() const { return static_cast<int>(constraints_.size()); }
     int recoveries() const { return recoveries_; }
     float maxStretch() const;
+    float meanStretch() const;
 
 private:
     struct DistanceConstraint {
@@ -46,6 +51,8 @@ private:
     void addConstraint(int a, int b, float stiffness);
     void solveDistanceConstraints();
     void solveCollisions(const Body& body, bool applyFriction);
+    void accumulateWindForces(const Wind& wind);
+    void solveTethers();
     void updateNormals();
 
     int cols_ = 0;
@@ -57,12 +64,19 @@ private:
     float groundHeight_ = 0.01f;
     float thickness_ = 0.02f;
     float friction_ = 0.4f;
+    float particleMass_ = 0.0f;
+
+    bool knotAttached_ = true;
+    float waistDrop_ = 0.0f;
+    float knotLoad_ = 0.0f;
 
     std::vector<Vec3> restPositions_;
     std::vector<Vec3> positions_;
     std::vector<Vec3> predicted_;
     std::vector<Vec3> velocities_;
     std::vector<float> inverseMass_;
+    std::vector<Vec3> forces_;
+    std::vector<float> tetherLength_;
     std::vector<DistanceConstraint> constraints_;
     int recoveries_ = 0;
 

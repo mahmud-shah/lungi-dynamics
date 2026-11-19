@@ -1,10 +1,12 @@
 #include <GL/freeglut.h>
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 #include "App.h"
 #include "Clock.h"
 #include "GlCheck.h"
+#include "Hud.h"
 
 namespace {
 
@@ -15,12 +17,14 @@ const char* const kWindowTitle = "Lungi Dynamics";
 const double kPhysicsDt = 1.0 / 120.0;
 const int kMaxSubsteps = 8;
 const double kMaxFrameTime = 0.25;
-const Vec3 kGravity(0.0f, -9.81f, 0.0f);
+constexpr Vec3 kGravity(0.0f, -9.81f, 0.0f);
 
 const int kLungiAround = 40;
 const int kLungiDown = 30;
 const float kLungiHemRadius = 0.29f;
 const float kLungiLength = 0.84f;
+
+const float kStormEaseRate = 0.8f;
 
 void printGlInfo()
 {
@@ -29,19 +33,44 @@ void printGlInfo()
     std::printf("GL version  : %s\n", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
 }
 
+void restartRun()
+{
+    g_app.cloth.reset();
+    g_app.knot.reset();
+    g_app.wind.reset();
+    g_app.survivalTime = 0.0f;
+    g_app.physicsAccumulator = 0.0;
+}
+
 void initScene()
 {
     glEnable(GL_DEPTH_TEST);
     glShadeModel(GL_SMOOTH);
-    glEnable(GL_POINT_SMOOTH);
     glEnable(GL_LINE_SMOOTH);
 
     g_app.toonRamp.create();
     const Body& body = g_app.body;
     g_app.cloth.buildTube(TubeShape{body.waistCenter(), body.waistRadiusX(), body.waistRadiusZ(),
                                     kLungiHemRadius, kLungiLength, kLungiAround, kLungiDown});
+    restartRun();
     g_app.lastFrameTime = Clock::nowSeconds();
     glCheck("initScene");
+}
+
+void physicsStep(float dt)
+{
+    g_app.wind.update(dt);
+    g_app.cloth.setWaistDrop(g_app.knot.waistDrop());
+    g_app.cloth.step(dt, kGravity, g_app.body, g_app.wind);
+
+    g_app.knot.update(dt, g_app.cloth.knotLoad());
+    if (g_app.knot.failed()) {
+        if (g_app.cloth.knotAttached()) {
+            g_app.cloth.releaseKnot();
+        }
+    } else {
+        g_app.survivalTime += dt;
+    }
 }
 
 // Fixed-timestep loop: physics always advances in equal 1/120 s steps, no
@@ -56,7 +85,7 @@ void advanceSimulation(double frameTime)
 
     g_app.physicsAccumulator += frameTime;
     while (g_app.physicsAccumulator >= kPhysicsDt && g_app.substepsLastFrame < kMaxSubsteps) {
-        g_app.cloth.step(static_cast<float>(kPhysicsDt), kGravity, g_app.body);
+        physicsStep(static_cast<float>(kPhysicsDt));
         g_app.physicsAccumulator -= kPhysicsDt;
         ++g_app.substepsLastFrame;
     }
@@ -65,44 +94,12 @@ void advanceSimulation(double frameTime)
     }
 }
 
-void drawText(int x, int y, const char* text)
+void easeStormTowardWind(float frameTime)
 {
-    glRasterPos2i(x, y);
-    glutBitmapString(GLUT_BITMAP_HELVETICA_12, reinterpret_cast<const unsigned char*>(text));
-}
-
-void drawDebugText()
-{
-    glDisable(GL_DEPTH_TEST);
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-    gluOrtho2D(0.0, g_app.windowWidth, 0.0, g_app.windowHeight);
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
-    glLoadIdentity();
-
-    const Cloth& cloth = g_app.cloth;
-    char line[160];
-    const int top = g_app.windowHeight - 20;
-
-    glColor3f(0.12f, 0.10f, 0.10f);
-    std::snprintf(line, sizeof(line), "FPS %.0f   substeps %d   %s",
-                  g_app.fps.fps(), g_app.substepsLastFrame, g_app.paused ? "PAUSED" : "");
-    drawText(12, top, line);
-    std::snprintf(line, sizeof(line), "Particles %d   constraints %d   iterations %d",
-                  cloth.particleCount(), cloth.constraintCount(), cloth.solverIterations());
-    drawText(12, top - 16, line);
-    std::snprintf(line, sizeof(line), "Max stretch %.2f%%   recoveries %d   storm %.2f",
-                  cloth.maxStretch() * 100.0f, cloth.recoveries(), g_app.environment.storm());
-    drawText(12, top - 32, line);
-    drawText(12, 14, "Drag/arrows: orbit   Wheel: zoom   G: gust   R: reset   P: pause   +/-: iterations   [ ]: storm");
-
-    glPopMatrix();
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
-    glMatrixMode(GL_MODELVIEW);
-    glEnable(GL_DEPTH_TEST);
+    Environment& env = g_app.environment;
+    const float target = g_app.wind.enabled() ? g_app.wind.preset().storm : 0.0f;
+    const float t = 1.0f - std::exp(-kStormEaseRate * frameTime);
+    env.setStorm(env.storm() + (target - env.storm()) * t);
 }
 
 void onDisplay()
@@ -114,6 +111,7 @@ void onDisplay()
 
     advanceSimulation(frameTime);
     g_app.camera.update(static_cast<float>(frameTime));
+    easeStormTowardWind(static_cast<float>(frameTime));
 
     Environment& env = g_app.environment;
 
@@ -128,9 +126,10 @@ void onDisplay()
     env.drawGround();
     g_app.body.draw(g_app.toonRamp, env.lightDir(), env.brightness());
     g_app.cloth.draw(g_app.toonRamp, env.lightDir(), env.brightness());
+    g_app.wind.drawStreaks(env.brightness());
     glDisable(GL_FOG);
 
-    drawDebugText();
+    Hud::draw(g_app);
 
     glutSwapBuffers();
     glCheck("onDisplay");
@@ -151,12 +150,15 @@ void onReshape(int width, int height)
 
 void onKeyboard(unsigned char key, int, int)
 {
-    Environment& env = g_app.environment;
     Cloth& cloth = g_app.cloth;
+    Wind& wind = g_app.wind;
 
     switch (key) {
     case 27:
         glutLeaveMainLoop();
+        break;
+    case '1': case '2': case '3': case '4':
+        wind.setPreset(key - '1');
         break;
     case 'f': case 'F':
         glutFullScreenToggle();
@@ -165,22 +167,22 @@ void onKeyboard(unsigned char key, int, int)
         g_app.paused = !g_app.paused;
         break;
     case 'r': case 'R':
-        cloth.reset();
+        restartRun();
         break;
     case 'g': case 'G':
-        cloth.applyGust(Vec3(0.6f, 0.8f, -4.0f));
+        wind.triggerGust();
+        break;
+    case 'w': case 'W':
+        wind.setEnabled(!wind.enabled());
+        break;
+    case 'd': case 'D':
+        g_app.showDebug = !g_app.showDebug;
         break;
     case '+': case '=':
-        cloth.setSolverIterations(cloth.solverIterations() + 2);
+        cloth.setSolverIterations(cloth.solverIterations() + 1);
         break;
     case '-': case '_':
-        cloth.setSolverIterations(cloth.solverIterations() - 2);
-        break;
-    case '[':
-        env.setStorm(env.storm() - 0.1f);
-        break;
-    case ']':
-        env.setStorm(env.storm() + 0.1f);
+        cloth.setSolverIterations(cloth.solverIterations() - 1);
         break;
     default:
         break;

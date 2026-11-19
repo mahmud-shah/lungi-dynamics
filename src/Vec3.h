@@ -8,7 +8,7 @@ struct Vec3 {
     float z = 0.0f;
 
     Vec3() = default;
-    Vec3(float xValue, float yValue, float zValue) : x(xValue), y(yValue), z(zValue) {}
+    constexpr Vec3(float xValue, float yValue, float zValue) : x(xValue), y(yValue), z(zValue) {}
 
     Vec3 operator+(const Vec3& o) const { return Vec3(x + o.x, y + o.y, z + o.z); }
     Vec3 operator-(const Vec3& o) const { return Vec3(x - o.x, y - o.y, z - o.z); }

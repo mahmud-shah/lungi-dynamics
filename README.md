@@ -10,9 +10,10 @@ lungi fabric, and my image-processing code turns it into the cloth texture.
 
 ## Status
 
-Work in progress. Current milestone: the lungi is a cloth tube with structural,
-shear and bending constraints, worn by a character made of capsules, with
-collision and friction.
+Work in progress. Current milestone: the knot and the Kalboishakhi wind. The
+lungi is held by a knot at the waist. Gusting wind pushes on every cloth
+triangle, the knot measures the force it has to hold, and when the load stays
+above its strength for too long the knot gives up.
 
 ## Features (planned)
 
@@ -28,13 +29,15 @@ collision and friction.
 
 | Key | Action |
 |-----|--------|
+| 1 / 2 / 3 / 4 | Wind preset: Mridu Batash, Jhor Asche!, Kalboishakhi, Nor'wester Mode |
+| G | Send a gust now |
+| W | Wind on / off |
+| R | Retie the lungi and restart the timer |
+| P | Pause physics |
+| D | Debug panel (FPS, particles, wind vector, knot force, stretch) |
+| + / - | More / fewer solver iterations |
 | Mouse drag / arrow keys | Orbit the camera |
 | Mouse wheel | Zoom |
-| G | Push the lungi with a gust |
-| R | Reset the lungi |
-| P | Pause physics |
-| + / - | More / fewer solver iterations |
-| [ / ] | Calmer / stormier sky |
 | F | Toggle fullscreen |
 | Esc | Quit |
 
