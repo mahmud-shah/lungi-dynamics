@@ -18,7 +18,6 @@ public:
     void drawSun(const Vec3& eye) const;
     void applyFog() const;
     void drawGround() const;
-    void drawClothesLine(const Vec3& left, const Vec3& right) const;
 
 private:
     struct SkyColors {

@@ -4,44 +4,101 @@
 #include <algorithm>
 #include <cmath>
 
-void Cloth::buildHangingSheet(const Vec3& topLeft, float width, float height, int cols, int rows)
+#include "Body.h"
+
+namespace {
+
+const float kStructuralStiffness = 1.0f;
+const float kShearStiffness = 0.8f;
+const float kBendStiffness = 0.15f;
+const int kFlareRows = 4;
+
+const Vec3 kOutsideColor(0.20f, 0.38f, 0.56f);
+const Vec3 kInsideColor(0.13f, 0.25f, 0.38f);
+
+} // namespace
+
+void Cloth::buildTube(const TubeShape& shape)
 {
-    cols_ = cols;
-    rows_ = rows;
-    const int count = cols * rows;
+    cols_ = shape.around;
+    rows_ = shape.down;
+    const int count = cols_ * rows_;
+    const float pi = 3.14159265f;
 
     restPositions_.resize(count);
     inverseMass_.assign(count, 1.0f);
 
-    for (int row = 0; row < rows; ++row) {
-        for (int col = 0; col < cols; ++col) {
-            const float u = static_cast<float>(col) / (cols - 1);
-            const float v = static_cast<float>(row) / (rows - 1);
-            restPositions_[index(col, row)] = topLeft + Vec3(u * width, -v * height, 0.0f);
+    for (int row = 0; row < rows_; ++row) {
+        const float flare = std::min(1.0f, static_cast<float>(row) / kFlareRows);
+        const float s = flare * flare * (3.0f - 2.0f * flare);
+        const float rx = shape.waistRadiusX + (shape.hemRadius - shape.waistRadiusX) * s;
+        const float rz = shape.waistRadiusZ + (shape.hemRadius - shape.waistRadiusZ) * s;
+        const float y = shape.waistCenter.y - shape.length * row / (rows_ - 1);
+
+        for (int col = 0; col < cols_; ++col) {
+            const float theta = 2.0f * pi * col / cols_;
+            restPositions_[index(col, row)] = Vec3(shape.waistCenter.x + std::cos(theta) * rx, y,
+                                                   shape.waistCenter.z + std::sin(theta) * rz);
         }
     }
 
-    inverseMass_[index(0, 0)] = 0.0f;
-    inverseMass_[index(cols - 1, 0)] = 0.0f;
+    for (int col = 0; col < cols_; ++col) {
+        inverseMass_[index(col, 0)] = 0.0f;
+    }
 
     constraints_.clear();
-    for (int row = 0; row < rows; ++row) {
-        for (int col = 0; col < cols; ++col) {
-            if (col + 1 < cols) {
-                addConstraint(index(col, row), index(col + 1, row));
-            }
-            if (row + 1 < rows) {
-                addConstraint(index(col, row), index(col, row + 1));
+    for (int row = 0; row < rows_; ++row) {
+        for (int col = 0; col < cols_; ++col) {
+            addConstraint(index(col, row), index(col + 1, row), kStructuralStiffness);
+            if (row + 1 < rows_) {
+                addConstraint(index(col, row), index(col, row + 1), kStructuralStiffness);
             }
         }
     }
+    structuralCount_ = static_cast<int>(constraints_.size());
+
+    for (int row = 0; row + 1 < rows_; ++row) {
+        for (int col = 0; col < cols_; ++col) {
+            addConstraint(index(col, row), index(col + 1, row + 1), kShearStiffness);
+            addConstraint(index(col + 1, row), index(col, row + 1), kShearStiffness);
+        }
+    }
+
+    for (int row = 0; row < rows_; ++row) {
+        for (int col = 0; col < cols_; ++col) {
+            addConstraint(index(col, row), index(col + 2, row), kBendStiffness);
+            if (row + 2 < rows_) {
+                addConstraint(index(col, row), index(col, row + 2), kBendStiffness);
+            }
+        }
+    }
+
+    indices_.clear();
+    for (int row = 0; row + 1 < rows_; ++row) {
+        for (int col = 0; col < cols_; ++col) {
+            const unsigned int a = index(col, row);
+            const unsigned int b = index(col + 1, row);
+            const unsigned int c = index(col, row + 1);
+            const unsigned int d = index(col + 1, row + 1);
+            indices_.push_back(a);
+            indices_.push_back(b);
+            indices_.push_back(c);
+            indices_.push_back(b);
+            indices_.push_back(d);
+            indices_.push_back(c);
+        }
+    }
+
+    normals_.resize(count);
+    outsideCoords_.resize(count);
+    insideCoords_.resize(count);
 
     reset();
 }
 
-void Cloth::addConstraint(int a, int b)
+void Cloth::addConstraint(int a, int b, float stiffness)
 {
-    constraints_.push_back({a, b, length(restPositions_[a] - restPositions_[b])});
+    constraints_.push_back({a, b, length(restPositions_[a] - restPositions_[b]), stiffness});
 }
 
 void Cloth::reset()
@@ -57,7 +114,7 @@ void Cloth::setSolverIterations(int iterations)
     iterations_ = std::max(1, std::min(60, iterations));
 }
 
-void Cloth::step(float dt, const Vec3& gravity)
+void Cloth::step(float dt, const Vec3& gravity, const Body& body)
 {
     const size_t count = positions_.size();
 
@@ -77,6 +134,7 @@ void Cloth::step(float dt, const Vec3& gravity)
 
     for (int it = 0; it < iterations_; ++it) {
         solveDistanceConstraints();
+        solveCollisions(body, it == iterations_ - 1);
     }
 
     for (size_t i = 0; i < count; ++i) {
@@ -99,8 +157,9 @@ void Cloth::step(float dt, const Vec3& gravity)
 }
 
 // PBD distance constraint C = |pa - pb| - L.
-// Each end moves along the line between them, split by inverse mass:
-//   dpa = -wa / (wa + wb) * C * n,   dpb = +wb / (wa + wb) * C * n
+// Each end moves along the line between them, split by inverse mass and
+// scaled by the constraint's stiffness k in [0, 1]:
+//   dpa = -k * wa / (wa + wb) * C * n,   dpb = +k * wb / (wa + wb) * C * n
 void Cloth::solveDistanceConstraints()
 {
     for (const DistanceConstraint& c : constraints_) {
@@ -115,9 +174,26 @@ void Cloth::solveDistanceConstraints()
         if (len < 1e-6f) {
             continue;
         }
-        const Vec3 correction = delta * ((len - c.restLength) / (len * wSum));
+        const Vec3 correction = delta * (c.stiffness * (len - c.restLength) / (len * wSum));
         predicted_[c.a] += correction * wa;
         predicted_[c.b] -= correction * wb;
+    }
+}
+
+// Friction removes part of the sliding motion along the body surface during
+// this step, so the cloth grips the legs instead of sliding like ice.
+void Cloth::solveCollisions(const Body& body, bool applyFriction)
+{
+    for (size_t i = 0; i < predicted_.size(); ++i) {
+        if (inverseMass_[i] == 0.0f) {
+            continue;
+        }
+        Vec3 normal;
+        if (body.pushOut(predicted_[i], thickness_, normal) && applyFriction) {
+            const Vec3 moved = predicted_[i] - positions_[i];
+            const Vec3 tangential = moved - normal * dot(moved, normal);
+            predicted_[i] -= tangential * friction_;
+        }
     }
 }
 
@@ -134,36 +210,62 @@ void Cloth::applyGust(const Vec3& deltaVelocity)
 float Cloth::maxStretch() const
 {
     float worst = 0.0f;
-    for (const DistanceConstraint& c : constraints_) {
-        const float ratio = length(positions_[c.a] - positions_[c.b]) / c.restLength - 1.0f;
-        worst = std::max(worst, ratio);
+    for (int i = 0; i < structuralCount_; ++i) {
+        const DistanceConstraint& c = constraints_[i];
+        worst = std::max(worst, length(positions_[c.a] - positions_[c.b]) / c.restLength - 1.0f);
     }
     return worst;
 }
 
-void Cloth::draw(float brightness) const
+void Cloth::updateNormals()
 {
-    const Vec3 thread = Vec3(0.62f, 0.16f, 0.14f) * brightness;
-    glColor3f(thread.x, thread.y, thread.z);
-    glLineWidth(1.5f);
-    glBegin(GL_LINES);
-    for (const DistanceConstraint& c : constraints_) {
-        glVertex3f(positions_[c.a].x, positions_[c.a].y, positions_[c.a].z);
-        glVertex3f(positions_[c.b].x, positions_[c.b].y, positions_[c.b].z);
+    std::fill(normals_.begin(), normals_.end(), Vec3());
+    for (size_t t = 0; t + 2 < indices_.size(); t += 3) {
+        const unsigned int a = indices_[t];
+        const unsigned int b = indices_[t + 1];
+        const unsigned int c = indices_[t + 2];
+        const Vec3 faceNormal = cross(positions_[b] - positions_[a], positions_[c] - positions_[a]);
+        normals_[a] += faceNormal;
+        normals_[b] += faceNormal;
+        normals_[c] += faceNormal;
     }
-    glEnd();
-    glLineWidth(1.0f);
+    for (Vec3& n : normals_) {
+        n = normalized(n);
+    }
+}
 
-    glPointSize(3.0f);
-    glBegin(GL_POINTS);
-    for (size_t i = 0; i < positions_.size(); ++i) {
-        if (inverseMass_[i] == 0.0f) {
-            glColor3f(0.15f, 0.15f, 0.15f);
-        } else {
-            glColor3f(0.95f * brightness, 0.90f * brightness, 0.80f * brightness);
-        }
-        glVertex3f(positions_[i].x, positions_[i].y, positions_[i].z);
+// Two-sided lighting: the outside is drawn with back faces culled and the
+// normal as computed; the inside is drawn with front faces culled and the
+// normal flipped, so the inner surface is lit from its own side.
+void Cloth::draw(const ToonRamp& ramp, const Vec3& lightDir, float brightness)
+{
+    updateNormals();
+    for (size_t i = 0; i < normals_.size(); ++i) {
+        outsideCoords_[i] = ToonRamp::coordinate(normals_[i], lightDir);
+        insideCoords_[i] = ToonRamp::coordinate(-normals_[i], lightDir);
     }
-    glEnd();
-    glPointSize(1.0f);
+
+    ramp.bind();
+    glEnable(GL_CULL_FACE);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+    glVertexPointer(3, GL_FLOAT, sizeof(Vec3), &positions_[0].x);
+
+    const GLsizei indexCount = static_cast<GLsizei>(indices_.size());
+
+    glCullFace(GL_BACK);
+    glColor3f(kOutsideColor.x * brightness, kOutsideColor.y * brightness, kOutsideColor.z * brightness);
+    glTexCoordPointer(1, GL_FLOAT, 0, outsideCoords_.data());
+    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, indices_.data());
+
+    glCullFace(GL_FRONT);
+    glColor3f(kInsideColor.x * brightness, kInsideColor.y * brightness, kInsideColor.z * brightness);
+    glTexCoordPointer(1, GL_FLOAT, 0, insideCoords_.data());
+    glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, indices_.data());
+
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glCullFace(GL_BACK);
+    glDisable(GL_CULL_FACE);
+    ramp.unbind();
 }

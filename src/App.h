@@ -1,10 +1,10 @@
 #pragma once
 
+#include "Body.h"
 #include "Camera.h"
 #include "Cloth.h"
 #include "Environment.h"
 #include "FpsCounter.h"
-#include "TestSphere.h"
 #include "ToonRamp.h"
 
 // GLUT callbacks have no user pointer, so this struct is the single place
@@ -17,7 +17,7 @@ struct AppState {
     OrbitCamera camera;
     Environment environment;
     ToonRamp toonRamp;
-    TestSphere sphere{Vec3(-1.4f, 0.7f, 0.3f), 0.7f, Vec3(0.95f, 0.78f, 0.62f), 40, 28};
+    Body body;
     Cloth cloth;
 
     bool paused = false;

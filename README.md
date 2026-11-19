@@ -10,8 +10,9 @@ lungi fabric, and my image-processing code turns it into the cloth texture.
 
 ## Status
 
-Work in progress. Current milestone: orbit camera, painted sky, toon shading
-and a first cloth test (a sheet hanging on a clothes line).
+Work in progress. Current milestone: the lungi is a cloth tube with structural,
+shear and bending constraints, worn by a character made of capsules, with
+collision and friction.
 
 ## Features (planned)
 
@@ -29,8 +30,8 @@ and a first cloth test (a sheet hanging on a clothes line).
 |-----|--------|
 | Mouse drag / arrow keys | Orbit the camera |
 | Mouse wheel | Zoom |
-| G | Push the cloth with a gust |
-| R | Reset the cloth |
+| G | Push the lungi with a gust |
+| R | Reset the lungi |
 | P | Pause physics |
 | + / - | More / fewer solver iterations |
 | [ / ] | Calmer / stormier sky |

@@ -10,7 +10,6 @@ const float kTileSize = 2.0f;
 
 const Vec3 kGrassGreen(0.45f, 0.58f, 0.28f);
 const Vec3 kRiceGold(0.66f, 0.64f, 0.33f);
-const Vec3 kBambooBrown(0.42f, 0.30f, 0.18f);
 
 float hash2(int i, int j)
 {
@@ -163,25 +162,4 @@ void Environment::drawGround() const
         }
     }
     glEnd();
-}
-
-void Environment::drawClothesLine(const Vec3& left, const Vec3& right) const
-{
-    const Vec3 c = kBambooBrown * brightness();
-    glColor3f(c.x, c.y, c.z);
-
-    glLineWidth(5.0f);
-    glBegin(GL_LINES);
-    glVertex3f(left.x, 0.0f, left.z);
-    glVertex3f(left.x, left.y + 0.15f, left.z);
-    glVertex3f(right.x, 0.0f, right.z);
-    glVertex3f(right.x, right.y + 0.15f, right.z);
-    glEnd();
-
-    glLineWidth(2.0f);
-    glBegin(GL_LINES);
-    glVertex3f(left.x, left.y, left.z);
-    glVertex3f(right.x, right.y, right.z);
-    glEnd();
-    glLineWidth(1.0f);
 }

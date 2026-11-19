@@ -16,15 +16,15 @@ public:
     Vec3 eye() const;
 
 private:
-    Vec3 target_{0.0f, 1.0f, 0.0f};
+    Vec3 target_{0.0f, 0.9f, 0.0f};
 
     float yaw_ = 0.6f;
     float pitch_ = 0.22f;
-    float distance_ = 6.5f;
+    float distance_ = 4.0f;
 
     float goalYaw_ = 0.6f;
     float goalPitch_ = 0.22f;
-    float goalDistance_ = 6.5f;
+    float goalDistance_ = 4.0f;
 
     bool dragging_ = false;
     int lastX_ = 0;

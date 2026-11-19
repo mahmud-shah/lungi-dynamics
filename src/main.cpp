@@ -17,8 +17,10 @@ const int kMaxSubsteps = 8;
 const double kMaxFrameTime = 0.25;
 const Vec3 kGravity(0.0f, -9.81f, 0.0f);
 
-const Vec3 kLineLeft(0.2f, 2.4f, 0.0f);
-const Vec3 kLineRight(2.4f, 2.4f, 0.0f);
+const int kLungiAround = 40;
+const int kLungiDown = 30;
+const float kLungiHemRadius = 0.29f;
+const float kLungiLength = 0.84f;
 
 void printGlInfo()
 {
@@ -35,7 +37,9 @@ void initScene()
     glEnable(GL_LINE_SMOOTH);
 
     g_app.toonRamp.create();
-    g_app.cloth.buildHangingSheet(kLineLeft, kLineRight.x - kLineLeft.x, 1.6f, 24, 18);
+    const Body& body = g_app.body;
+    g_app.cloth.buildTube(TubeShape{body.waistCenter(), body.waistRadiusX(), body.waistRadiusZ(),
+                                    kLungiHemRadius, kLungiLength, kLungiAround, kLungiDown});
     g_app.lastFrameTime = Clock::nowSeconds();
     glCheck("initScene");
 }
@@ -52,7 +56,7 @@ void advanceSimulation(double frameTime)
 
     g_app.physicsAccumulator += frameTime;
     while (g_app.physicsAccumulator >= kPhysicsDt && g_app.substepsLastFrame < kMaxSubsteps) {
-        g_app.cloth.step(static_cast<float>(kPhysicsDt), kGravity);
+        g_app.cloth.step(static_cast<float>(kPhysicsDt), kGravity, g_app.body);
         g_app.physicsAccumulator -= kPhysicsDt;
         ++g_app.substepsLastFrame;
     }
@@ -122,9 +126,8 @@ void onDisplay()
     env.applyFog();
     glEnable(GL_FOG);
     env.drawGround();
-    env.drawClothesLine(kLineLeft, kLineRight);
-    g_app.sphere.draw(g_app.toonRamp, env.lightDir(), env.brightness());
-    g_app.cloth.draw(env.brightness());
+    g_app.body.draw(g_app.toonRamp, env.lightDir(), env.brightness());
+    g_app.cloth.draw(g_app.toonRamp, env.lightDir(), env.brightness());
     glDisable(GL_FOG);
 
     drawDebugText();

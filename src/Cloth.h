@@ -2,16 +2,29 @@
 
 #include <vector>
 
+#include "ToonRamp.h"
 #include "Vec3.h"
+
+class Body;
+
+struct TubeShape {
+    Vec3 waistCenter;
+    float waistRadiusX;
+    float waistRadiusZ;
+    float hemRadius;
+    float length;
+    int around;
+    int down;
+};
 
 class Cloth {
 public:
-    void buildHangingSheet(const Vec3& topLeft, float width, float height, int cols, int rows);
+    void buildTube(const TubeShape& shape);
     void reset();
 
-    void step(float dt, const Vec3& gravity);
+    void step(float dt, const Vec3& gravity, const Body& body);
     void applyGust(const Vec3& deltaVelocity);
-    void draw(float brightness) const;
+    void draw(const ToonRamp& ramp, const Vec3& lightDir, float brightness);
 
     void setSolverIterations(int iterations);
     int solverIterations() const { return iterations_; }
@@ -26,18 +39,24 @@ private:
         int a;
         int b;
         float restLength;
+        float stiffness;
     };
 
-    int index(int col, int row) const { return row * cols_ + col; }
-    void addConstraint(int a, int b);
+    int index(int col, int row) const { return row * cols_ + ((col % cols_) + cols_) % cols_; }
+    void addConstraint(int a, int b, float stiffness);
     void solveDistanceConstraints();
+    void solveCollisions(const Body& body, bool applyFriction);
+    void updateNormals();
 
     int cols_ = 0;
     int rows_ = 0;
-    int iterations_ = 20;
-    float velocityRetention_ = 0.998f;
+    int iterations_ = 15;
+    int structuralCount_ = 0;
+    float velocityRetention_ = 0.996f;
     float maxSpeed_ = 25.0f;
     float groundHeight_ = 0.01f;
+    float thickness_ = 0.02f;
+    float friction_ = 0.4f;
 
     std::vector<Vec3> restPositions_;
     std::vector<Vec3> positions_;
@@ -46,4 +65,9 @@ private:
     std::vector<float> inverseMass_;
     std::vector<DistanceConstraint> constraints_;
     int recoveries_ = 0;
+
+    std::vector<Vec3> normals_;
+    std::vector<float> outsideCoords_;
+    std::vector<float> insideCoords_;
+    std::vector<unsigned int> indices_;
 };
