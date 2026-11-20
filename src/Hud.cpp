@@ -150,7 +150,8 @@ void drawDebugPanel(const AppState& app)
     text(x, top, line);
     std::snprintf(line, sizeof(line), "Particles %d   constraints %d", cloth.particleCount(), cloth.constraintCount());
     text(x, top - kLine, line);
-    std::snprintf(line, sizeof(line), "Solver iterations %d   dt 1/120 s", cloth.solverIterations());
+    std::snprintf(line, sizeof(line), "Solver iterations %d (%d at this dt)   dt 1/%.0f s",
+                  cloth.solverIterations(), cloth.iterationsFor(app.physicsDt), 1.0f / app.physicsDt);
     text(x, top - 2 * kLine, line);
     std::snprintf(line, sizeof(line), "Wind vector (%.1f, %.1f, %.1f) m/s", w.x, w.y, w.z);
     text(x, top - 3 * kLine, line);
@@ -248,7 +249,7 @@ void drawTitle(const AppState& app)
     const int top = app.windowHeight - 110;
     char line[128];
 
-    rect(cx - 280, top - 250, 560, 300, 0.98f, 0.94f, 0.85f, 0.82f);
+    rect(cx - 280, top - 262, 560, 312, 0.98f, 0.94f, 0.85f, 0.82f);
 
     glColor3f(0.55f, 0.16f, 0.12f);
     centeredText(cx, top, "LUNGI DYNAMICS", kLarge);
@@ -266,6 +267,39 @@ void drawTitle(const AppState& app)
     glColor3f(0.25f, 0.20f, 0.18f);
     centeredText(cx, top - 195, "In the storm, hold SPACE to grab the knot. Grip runs out, so save it for the gusts!", kSmall);
     centeredText(cx, top - 215, "O: make a lungi from your own fabric photo      Esc: quit", kSmall);
+    centeredText(cx, top - 233, "E: evaluation mode (writes a CSV)    M: sound on/off    F12: screenshot", kSmall);
+}
+
+void drawEvaluation(const AppState& app)
+{
+    const Evaluation& eval = app.evaluation;
+    const EvalConfig& c = eval.config();
+    const int cx = app.windowWidth / 2;
+    const int top = app.windowHeight - 60;
+    char line[160];
+    rect(cx - 300, top - 70, 600, 92, 0.12f, 0.10f, 0.16f, 0.75f);
+    glColor3f(1.0f, 0.88f, 0.55f);
+    std::snprintf(line, sizeof(line), "EVALUATION MODE   test %d of %d", eval.index() + 1, eval.count());
+    centeredText(cx, top, line, kMedium);
+    glColor3f(0.95f, 0.93f, 0.88f);
+    std::snprintf(line, sizeof(line), "Time step 1/%.0f s   Wind: %s   %s %.1f s", 1.0f / c.timeStep,
+                  Wind::presetName(c.windPreset), eval.elapsed() < 1.5f ? "warming up" : "measuring",
+                  eval.elapsed());
+    centeredText(cx, top - 26, line, kSmall);
+    centeredText(cx, top - 46, "Results are written to logs/evaluation_<date>.csv     Esc: cancel", kSmall);
+}
+
+void drawToast(const AppState& app)
+{
+    if (app.toastTime <= 0.0f) {
+        return;
+    }
+    const float alpha = app.toastTime < 1.0f ? app.toastTime : 1.0f;
+    const int cx = app.windowWidth / 2;
+    const int w = textWidth(app.toast.c_str(), kMedium) + 30;
+    rect(cx - w / 2.0f, 40, w, 32, 0.12f, 0.10f, 0.10f, 0.75f * alpha);
+    glColor4f(1.0f, 0.95f, 0.85f, alpha);
+    centeredText(cx, 50, app.toast.c_str(), kMedium);
 }
 
 void drawResults(const AppState& app)
@@ -314,7 +348,9 @@ void draw(const AppState& app)
     beginOverlay(app.windowWidth, app.windowHeight);
 
     const GameState state = app.game.state();
-    if (state == GameState::Title) {
+    if (app.evaluation.running()) {
+        drawEvaluation(app);
+    } else if (state == GameState::Title) {
         drawTitle(app);
     } else if (state == GameState::Playing) {
         drawPlayPanel(app);
@@ -326,7 +362,7 @@ void draw(const AppState& app)
         }
         glColor3f(0.12f, 0.10f, 0.10f);
         text(kMargin, kMargin,
-             "SPACE: grip   L: lungi   S: slow-mo   P: pause   R: restart   T: title   1-4: sandbox wind   G/U: gust/updraft   D: debug   Drag/wheel: camera");
+             "SPACE: grip   L: lungi   S: slow-mo   P: pause   R: restart   T: title   1-4: wind   G/U: gust/updraft   M: sound   F12: shot   D: debug");
     } else {
         drawResults(app);
     }
@@ -334,6 +370,7 @@ void draw(const AppState& app)
     if (app.showDebug) {
         drawDebugPanel(app);
     }
+    drawToast(app);
 
     endOverlay();
 }

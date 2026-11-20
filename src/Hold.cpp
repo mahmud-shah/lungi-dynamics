@@ -98,3 +98,10 @@ float Hold::knotStrengthMultiplier() const
     default: return 1.0f;
     }
 }
+
+void Hold::letGo()
+{
+    state_ = HoldState::None;
+    slipTimer_ = 0.0f;
+    justSlipped_ = false;
+}

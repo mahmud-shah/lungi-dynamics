@@ -165,8 +165,10 @@ void Body::buildCapsuleMesh(const Capsule& c, unsigned int showIn)
 
 // Closest point on the capsule's core segment: t = clamp((p - a).(b - a) / |b - a|^2, 0, 1).
 // If the point is closer to that core than radius + thickness, project it
-// back onto the surface along the line from the core.
-bool Body::pushOut(Vec3& point, float thickness, Vec3& normal) const
+// back onto the surface along the line from the core. When a fast particle
+// has already passed the core during the step, the side it came from
+// (previous position) is used instead, so cloth cannot tunnel through a leg.
+bool Body::pushOut(Vec3& point, const Vec3& previous, float thickness, Vec3& normal) const
 {
     if (point.y > collisionTop_ + thickness) {
         return false;
@@ -183,8 +185,11 @@ bool Body::pushOut(Vec3& point, float thickness, Vec3& normal) const
         const float distSq = dot(offset, offset);
 
         if (distSq < minDistance * minDistance) {
-            const float dist = std::sqrt(distSq);
-            const Vec3 n = dist > 1e-6f ? offset / dist : Vec3(0.0f, 0.0f, 1.0f);
+            const float tPrev = abLengthSq > 1e-8f ? clamp01(dot(previous - c.a, ab) / abLengthSq) : 0.0f;
+            const Vec3 previousOffset = previous - (c.a + ab * tPrev);
+            const Vec3 side = dot(offset, previousOffset) < 0.0f ? previousOffset : offset;
+            const float sideLength = length(side);
+            const Vec3 n = sideLength > 1e-6f ? side / sideLength : Vec3(0.0f, 0.0f, 1.0f);
             point = closest + n * minDistance;
             normal = n;
             hit = true;

@@ -50,6 +50,8 @@
 			<Add directory="third_party/freeglut/lib" />
 		</Linker>
 		<Unit filename="src/App.h" />
+		<Unit filename="src/Audio.h" />
+		<Unit filename="src/AudioWin.cpp" />
 		<Unit filename="src/Body.cpp" />
 		<Unit filename="src/Body.h" />
 		<Unit filename="src/Camera.cpp" />
@@ -59,6 +61,10 @@
 		<Unit filename="src/Cloth.h" />
 		<Unit filename="src/Environment.cpp" />
 		<Unit filename="src/Environment.h" />
+		<Unit filename="src/Evaluation.cpp" />
+		<Unit filename="src/Evaluation.h" />
+		<Unit filename="src/FilmOverlay.cpp" />
+		<Unit filename="src/FilmOverlay.h" />
 		<Unit filename="src/FpsCounter.cpp" />
 		<Unit filename="src/FpsCounter.h" />
 		<Unit filename="src/Game.cpp" />
@@ -79,6 +85,8 @@
 		<Unit filename="src/PhotoLab.h" />
 		<Unit filename="src/Platform.h" />
 		<Unit filename="src/PlatformWin.cpp" />
+		<Unit filename="src/Scenery.cpp" />
+		<Unit filename="src/Scenery.h" />
 		<Unit filename="src/Speech.cpp" />
 		<Unit filename="src/Speech.h" />
 		<Unit filename="src/StbImageImpl.cpp" />

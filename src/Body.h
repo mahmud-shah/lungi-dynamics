@@ -29,7 +29,7 @@ class Body {
 public:
     Body();
 
-    bool pushOut(Vec3& point, float thickness, Vec3& normal) const;
+    bool pushOut(Vec3& point, const Vec3& previous, float thickness, Vec3& normal) const;
     void draw(const ToonRamp& ramp, const Vec3& lightDir, float brightness);
     void setPose(ArmPose arms, Face face);
 

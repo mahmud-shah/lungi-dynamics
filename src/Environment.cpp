@@ -5,29 +5,13 @@
 
 namespace {
 
-const int kGroundTiles = 24;
-const float kTileSize = 2.0f;
-
-constexpr Vec3 kGrassGreen(0.45f, 0.58f, 0.28f);
-constexpr Vec3 kRiceGold(0.66f, 0.64f, 0.33f);
-
-float hash2(int i, int j)
-{
-    const float s = std::sin(i * 12.9898f + j * 78.233f) * 43758.5453f;
-    return s - std::floor(s);
-}
+constexpr Vec3 kFlashSky(0.82f, 0.82f, 0.95f);
 
 } // namespace
 
 Environment::Environment()
     : lightDir_(normalized(Vec3(-0.75f, 0.40f, 0.35f)))
 {
-    groundTileColors_.reserve(kGroundTiles * kGroundTiles);
-    for (int i = 0; i < kGroundTiles; ++i) {
-        for (int j = 0; j < kGroundTiles; ++j) {
-            groundTileColors_.push_back(lerp(kGrassGreen, kRiceGold, hash2(i, j) * 0.6f));
-        }
-    }
 }
 
 void Environment::setStorm(float storm)
@@ -37,7 +21,7 @@ void Environment::setStorm(float storm)
 
 float Environment::brightness() const
 {
-    return 1.0f - 0.45f * storm_;
+    return 1.0f - 0.45f * storm_ + 0.5f * flash_;
 }
 
 Environment::SkyColors Environment::skyColors() const
@@ -50,7 +34,9 @@ Environment::SkyColors Environment::skyColors() const
     const SkyColors& to = storm_ < 0.5f ? brewing : dark;
     const float t = storm_ < 0.5f ? storm_ * 2.0f : (storm_ - 0.5f) * 2.0f;
 
-    return SkyColors{lerp(from.top, to.top, t), lerp(from.middle, to.middle, t), lerp(from.horizon, to.horizon, t)};
+    const SkyColors mixed{lerp(from.top, to.top, t), lerp(from.middle, to.middle, t), lerp(from.horizon, to.horizon, t)};
+    const float f = 0.6f * flash_;
+    return SkyColors{lerp(mixed.top, kFlashSky, f), lerp(mixed.middle, kFlashSky, f), lerp(mixed.horizon, kFlashSky, f)};
 }
 
 void Environment::drawSky() const
@@ -143,23 +129,3 @@ void Environment::applyFog() const
     glFogf(GL_FOG_END, 42.0f - 18.0f * storm_);
 }
 
-void Environment::drawGround() const
-{
-    const float b = brightness();
-    const float half = kGroundTiles * kTileSize * 0.5f;
-
-    glBegin(GL_QUADS);
-    for (int i = 0; i < kGroundTiles; ++i) {
-        for (int j = 0; j < kGroundTiles; ++j) {
-            const Vec3 c = groundTileColors_[i * kGroundTiles + j] * b;
-            const float x0 = -half + i * kTileSize;
-            const float z0 = -half + j * kTileSize;
-            glColor3f(c.x, c.y, c.z);
-            glVertex3f(x0, 0.0f, z0);
-            glVertex3f(x0, 0.0f, z0 + kTileSize);
-            glVertex3f(x0 + kTileSize, 0.0f, z0 + kTileSize);
-            glVertex3f(x0 + kTileSize, 0.0f, z0);
-        }
-    }
-    glEnd();
-}

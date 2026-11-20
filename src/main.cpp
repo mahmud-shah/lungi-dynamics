@@ -15,7 +15,6 @@ AppState g_app;
 
 const char* const kWindowTitle = "Lungi Dynamics";
 
-const double kPhysicsDt = 1.0 / 120.0;
 const int kMaxSubsteps = 8;
 const double kMaxFrameTime = 0.25;
 constexpr Vec3 kGravity(0.0f, -9.81f, 0.0f);
@@ -30,6 +29,8 @@ const float kTitleOrbitSpeed = 0.15f;
 const float kSlowMotionScale = 0.25f;
 const float kBuiltInTileMetres = 0.32f;
 const float kPhotoTileMetres = 0.16f;
+const float kDefaultPhysicsDt = 1.0f / 120.0f;
+const float kToastSeconds = 6.0f;
 
 void printGlInfo()
 {
@@ -82,9 +83,16 @@ void resetWorld(unsigned int stormSeed)
     g_app.physicsAccumulator = 0.0;
 }
 
+void showToast(const std::string& text)
+{
+    g_app.toast = text;
+    g_app.toastTime = kToastSeconds;
+}
+
 void showTitle()
 {
     g_app.game.showTitle();
+    g_app.physicsDt = kDefaultPhysicsDt;
     g_app.sandbox = false;
     g_app.paused = false;
     g_app.timeScale = 1.0f;
@@ -113,6 +121,9 @@ void initScene(const char* startupPhoto)
     g_app.patterns = Patterns::builtIn();
     g_app.fabric.create();
     g_app.photoLab.create();
+    g_app.film.create();
+    g_app.scenery.build(g_app.environment.lightDir());
+    g_app.audio.init();
 
     const Body& body = g_app.body;
     g_app.cloth.buildTube(TubeShape{body.waistCenter(), body.waistRadiusX(), body.waistRadiusZ(),
@@ -136,6 +147,9 @@ void physicsStep(float dt)
         g_app.wind.setPreset(game.stormStage());
     }
     g_app.wind.update(dt);
+    if (g_app.wind.consumeGustStart() && g_app.wind.speed() > 4.0f) {
+        g_app.audio.play(Sound::Gust);
+    }
 
     g_app.knot.setStrength(game.difficulty().knotStrength * game.knotStrengthMultiplier());
     g_app.cloth.setWaistDrop(g_app.knot.waistDrop());
@@ -154,11 +168,23 @@ void physicsStep(float dt)
                           g_app.gripKeyHeld};
     game.update(dt, input);
     g_app.body.setPose(game.armPose(), game.face());
+
+    if (game.hold().justSlipped()) {
+        g_app.audio.play(Sound::Slip);
+    }
+    if (g_app.knot.failed() && !g_app.lastKnotFailed) {
+        g_app.audio.play(Sound::KnotPop);
+    }
+    g_app.lastKnotFailed = g_app.knot.failed();
+    if (game.outcome() == Outcome::FlewUp && g_app.lastOutcome != Outcome::FlewUp) {
+        g_app.audio.play(Sound::FlyUp);
+    }
+    g_app.lastOutcome = game.outcome();
 }
 
-// Fixed-timestep loop: physics always advances in equal 1/120 s steps, no
-// matter how fast frames are drawn. Slow motion only feeds less real time
-// into the accumulator, so the physics itself is unchanged.
+// Fixed-timestep loop: physics always advances in equal steps (1/120 s by
+// default), no matter how fast frames are drawn. Slow motion only feeds less
+// real time into the accumulator, so the physics itself is unchanged.
 void advanceSimulation(double frameTime)
 {
     g_app.substepsLastFrame = 0;
@@ -167,9 +193,10 @@ void advanceSimulation(double frameTime)
     }
 
     g_app.physicsAccumulator += frameTime * g_app.timeScale;
-    while (g_app.physicsAccumulator >= kPhysicsDt && g_app.substepsLastFrame < kMaxSubsteps) {
-        physicsStep(static_cast<float>(kPhysicsDt));
-        g_app.physicsAccumulator -= kPhysicsDt;
+    const double dt = g_app.physicsDt;
+    while (g_app.physicsAccumulator >= dt && g_app.substepsLastFrame < kMaxSubsteps) {
+        physicsStep(g_app.physicsDt);
+        g_app.physicsAccumulator -= dt;
         ++g_app.substepsLastFrame;
     }
     if (g_app.substepsLastFrame == kMaxSubsteps) {
@@ -203,6 +230,82 @@ void easeStormTowardWind(float frameTime)
     env.setStorm(env.storm() + (target - env.storm()) * t);
 }
 
+void applyEvaluationConfig()
+{
+    const EvalConfig& c = g_app.evaluation.config();
+    g_app.physicsDt = c.timeStep;
+    g_app.wind.setPreset(c.windPreset);
+    resetWorld(20261125u);
+}
+
+void startEvaluation()
+{
+    g_app.evaluation.start();
+    g_app.sandbox = true;
+    applyEvaluationConfig();
+}
+
+void updateEvaluation(double frameTime, double physicsMs)
+{
+    Evaluation& eval = g_app.evaluation;
+    if (!eval.running()) {
+        return;
+    }
+    const Cloth& cloth = g_app.cloth;
+    const FrameSample sample{static_cast<float>(frameTime), static_cast<float>(physicsMs), cloth.maxStretch(),
+                             cloth.meanStretch(), cloth.knotLoad(), cloth.recoveries()};
+    if (eval.update(sample, cloth.iterationsFor(g_app.physicsDt))) {
+        applyEvaluationConfig();
+    } else if (!eval.running()) {
+        showToast("Evaluation finished. Saved " + eval.savedPath());
+        showTitle();
+    }
+}
+
+// One line per finished game in logs/runs.csv, for the report's results table.
+void logFinishedRun()
+{
+    const Game& game = g_app.game;
+    const char* lungi = g_app.patternIndex >= 0 ? g_app.patterns[g_app.patternIndex].name : "Your photo";
+    const char* outcome = game.outcome() == Outcome::FlewUp ? "flew_up" : "fell_down";
+    char line[256];
+    std::snprintf(line, sizeof(line), "%s,%s,%s,%.1f,%.1f,%s,%d,%s,%.0f\n", timestampString().c_str(),
+                  game.difficulty().name, lungi, game.survivalTime(), game.strongestGustSurvived(), outcome,
+                  game.score(), game.tier().name, g_app.runFrames / std::max(0.001f, g_app.runSeconds));
+    if (!appendRunLog(line)) {
+        showToast("Could not write logs/runs.csv");
+    }
+}
+
+void trackRunState(double frameTime)
+{
+    const GameState state = g_app.game.state();
+    if (state == GameState::Playing) {
+        if (g_app.lastState != GameState::Playing) {
+            g_app.runSeconds = 0.0f;
+            g_app.runFrames = 0;
+        }
+        g_app.runSeconds += static_cast<float>(frameTime);
+        ++g_app.runFrames;
+    }
+    if (state == GameState::Results && g_app.lastState == GameState::Playing) {
+        logFinishedRun();
+    }
+    g_app.lastState = state;
+}
+
+void updateSound()
+{
+    const float wind = g_app.wind.speed();
+    const float windLevel = wind > 0.0f ? std::min(1.0f, 0.12f + wind / 20.0f) : 0.0f;
+    const float storm = g_app.environment.storm();
+    const float rainLevel = std::max(0.0f, std::min(1.0f, (storm - 0.45f) / 0.55f)) * 0.8f;
+    g_app.audio.setLoopLevels(windLevel, rainLevel);
+    if (g_app.scenery.consumeThunder()) {
+        g_app.audio.play(Sound::Thunder);
+    }
+}
+
 void onDisplay()
 {
     const double now = Clock::nowSeconds();
@@ -213,12 +316,26 @@ void onDisplay()
     if (g_app.inPhotoLab) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         g_app.photoLab.draw(g_app.windowWidth, g_app.windowHeight);
+        if (g_app.screenshotRequested) {
+            g_app.screenshotRequested = false;
+            saveScreenshot(g_app.windowWidth, g_app.windowHeight);
+        }
         glutSwapBuffers();
         glCheck("photoLab");
         return;
     }
 
+    const double physicsStart = Clock::nowSeconds();
     advanceSimulation(frameTime);
+    const double physicsMs = 1000.0 * (Clock::nowSeconds() - physicsStart);
+    updateEvaluation(frameTime, physicsMs);
+    trackRunState(frameTime);
+    g_app.toastTime = std::max(0.0f, g_app.toastTime - static_cast<float>(frameTime));
+
+    const float visualDt = g_app.paused ? 0.0f : static_cast<float>(frameTime) * g_app.timeScale;
+    g_app.scenery.update(visualDt, g_app.wind, g_app.environment.storm());
+    updateSound();
+
     if (g_app.game.state() == GameState::Title) {
         g_app.camera.rotate(kTitleOrbitSpeed * static_cast<float>(frameTime), 0.0f);
     }
@@ -228,6 +345,7 @@ void onDisplay()
     Environment& env = g_app.environment;
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    env.setFlash(g_app.scenery.flash());
     env.drawSky();
 
     const bool lungiLeaving = g_app.game.state() == GameState::Playing && g_app.knot.failed();
@@ -237,21 +355,34 @@ void onDisplay()
     g_app.camera.apply(g_app.windowWidth, g_app.windowHeight);
     projectHeadToScreen();
     env.drawSun(g_app.camera.eye());
+    g_app.scenery.drawClouds(g_app.camera.eye(), env.storm(), g_app.scenery.flash());
 
     env.applyFog();
     glEnable(GL_FOG);
-    env.drawGround();
+    const float brightness = env.brightness();
+    g_app.scenery.drawGround(brightness);
+    g_app.scenery.drawProps(g_app.toonRamp, env.lightDir(), brightness);
+    g_app.scenery.drawGrass(brightness);
     g_app.body.draw(g_app.toonRamp, env.lightDir(), env.brightness());
     g_app.cloth.draw(g_app.toonRamp, g_app.fabric, env.lightDir(), env.brightness());
     const Body& body = g_app.body;
     const WaistBand band{body.waistCenter() - Vec3(0.0f, g_app.knot.waistDrop(), 0.0f),
                          body.waistRadiusX(), body.waistRadiusZ()};
     g_app.knot.draw(band, g_app.fabric.mainColor(), g_app.toonRamp, env.lightDir(), env.brightness());
-    g_app.wind.drawStreaks(env.brightness());
+    g_app.scenery.drawDebris(brightness);
+    g_app.wind.drawStreaks(brightness);
+    g_app.scenery.drawRain(brightness);
+    g_app.scenery.drawLightningBolt();
     glDisable(GL_FOG);
 
+    g_app.film.draw(g_app.windowWidth, g_app.windowHeight, env.storm(), g_app.scenery.flash());
     Hud::draw(g_app);
 
+    if (g_app.screenshotRequested) {
+        g_app.screenshotRequested = false;
+        const std::string path = saveScreenshot(g_app.windowWidth, g_app.windowHeight);
+        showToast(path.empty() ? "Could not save the screenshot" : "Saved " + path);
+    }
     glutSwapBuffers();
     glCheck("onDisplay");
 
@@ -304,6 +435,9 @@ void handleTitleKey(unsigned char key)
         break;
     case 'o': case 'O':
         enterPhotoLab();
+        break;
+    case 'e': case 'E':
+        startEvaluation();
         break;
     case 27:
         glutLeaveMainLoop();
@@ -377,8 +511,23 @@ void handlePlayKey(unsigned char key)
 
 void onKeyboard(unsigned char key, int, int)
 {
+    if (key == 'm' || key == 'M') {
+        g_app.audio.toggleMute();
+        showToast(g_app.audio.muted() ? "Sound off (M)" : "Sound on (M)");
+        return;
+    }
     if (g_app.inPhotoLab) {
         handlePhotoLabKey(key);
+        return;
+    }
+    if (g_app.evaluation.running()) {
+        if (key == 27) {
+            g_app.evaluation.stop();
+            showToast("Evaluation cancelled");
+            showTitle();
+        } else if (key == 'd' || key == 'D') {
+            g_app.showDebug = !g_app.showDebug;
+        }
         return;
     }
     switch (key) {
@@ -411,6 +560,13 @@ void onKeyboardUp(unsigned char key, int, int)
 
 void onSpecialKey(int key, int, int)
 {
+    if (key == GLUT_KEY_F12) {
+        g_app.screenshotRequested = true;
+        return;
+    }
+    if (g_app.evaluation.running()) {
+        return;
+    }
     if (g_app.inPhotoLab) {
         switch (key) {
         case GLUT_KEY_LEFT:  g_app.photoLab.adjustPeriod(-1.0f, 0.0f); break;
@@ -509,6 +665,7 @@ int main(int argc, char** argv)
 
     glutMainLoop();
 
+    g_app.audio.shutdown();
     std::printf("Exited cleanly.\n");
     return 0;
 }

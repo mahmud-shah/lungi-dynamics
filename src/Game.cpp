@@ -86,11 +86,13 @@ const Difficulty& Game::difficulty() const
 void Game::update(float dt, const GameInput& in)
 {
     if (state_ != GameState::Playing) {
+        hold_.letGo();
         return;
     }
     speech_.update(dt);
 
     if (in.knotFailed) {
+        hold_.letGo();
         updateFailure(dt, in);
         return;
     }

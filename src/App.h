@@ -1,16 +1,21 @@
 #pragma once
 
+#include <string>
 #include <vector>
 
+#include "Audio.h"
 #include "Body.h"
 #include "Camera.h"
 #include "Cloth.h"
 #include "Environment.h"
+#include "Evaluation.h"
+#include "FilmOverlay.h"
 #include "FpsCounter.h"
 #include "Game.h"
 #include "Knot.h"
 #include "Pattern.h"
 #include "PhotoLab.h"
+#include "Scenery.h"
 #include "ToonRamp.h"
 #include "Wind.h"
 
@@ -29,6 +34,10 @@ struct AppState {
     Wind wind;
     Knot knot;
     Game game;
+    Scenery scenery;
+    FilmOverlay film;
+    AudioPlayer audio;
+    Evaluation evaluation;
 
     std::vector<FabricPattern> patterns;
     FabricTexture fabric;
@@ -41,6 +50,15 @@ struct AppState {
     bool sandbox = false;
     bool gripKeyHeld = false;
     float timeScale = 1.0f;
+    float physicsDt = 1.0f / 120.0f;
+    bool screenshotRequested = false;
+    std::string toast;
+    float toastTime = 0.0f;
+    float runSeconds = 0.0f;
+    int runFrames = 0;
+    GameState lastState = GameState::Title;
+    bool lastKnotFailed = false;
+    Outcome lastOutcome = Outcome::None;
     float headScreenX = 0.0f;
     float headScreenY = 0.0f;
 

@@ -10,7 +10,8 @@ lungi fabric, and my image-processing code turns it into the cloth texture.
 
 ## Status
 
-Work in progress. Current milestone: the playable game and the lungi patterns.
+Feature complete. Remaining work is testing on real lungi photos, the report
+and the demo video.
 
 The game starts on a title screen where I pick a difficulty and one of five
 woven lungi patterns. The storm then builds up on its own, from a calm
@@ -63,6 +64,21 @@ quarter to a third of the games.
 The character's face changes with the knot load (calm, worried, panic, shock),
 the arms grab or flail, and a speech bubble shows Banglish and English lines.
 
+### Village scene, storm and sound
+
+The character stands in a village courtyard: a tin-roofed hut, banana trees
+with torn leaves that sway with the wind, haystacks, grass, rice fields and a
+line of trees fading into the distance. Everything uses the same two- or
+three-tone toon ramp as the character. As the storm builds, the sky darkens,
+clouds roll in, leaves and paper scraps blow past, rain falls in slanted
+streaks and, in the strongest stage, lightning flashes with thunder a moment
+later. A soft vignette and a light film grain give the hand-painted look.
+
+Sounds: a looping wind that gets louder with the wind speed, rain that fades
+in with the storm, gust whooshes, thunder, the knot popping, the lungi flying
+off and the hands slipping. M mutes everything. Audio uses the Windows MCI API
+(winmm), so several sounds can play at once.
+
 ### Score
 
 Lungi Survival Score = (10 x seconds survived + 4 x strongest gust survived in
@@ -70,14 +86,34 @@ m/s - lungi displacement penalty) x difficulty multiplier (Easy 0.8, Normal 1.0,
 Hard 1.3). Tiers: Lungi Newbie (below 300), Gaye Joth Ase (300+),
 Kalboishakhi Warrior (430+), Lungi Legend (520+).
 
-## Features (planned)
+### Evaluation mode
 
-- Position-Based Dynamics cloth tube (about 40 x 60 particles)
-- Capsule body collision and a waist knot that can fail
-- Gusting Kalboishakhi wind with storm stages
-- Built-in fabric patterns and photo-based pattern extraction
-  (grayscale, normalisation, intensity profiles, DFT, k-means)
-- Toon-shaded, hand-painted look, HUD, Lungi Survival Score
+Press E on the title screen. The program runs every combination of physics
+time step (1/60, 1/120, 1/240 s) and wind preset (4) for 7.5 s each, about 90 s
+in total, and writes `logs/evaluation_<date>_<time>.csv` with FPS, frame time,
+physics time, maximum and mean cloth stretch, knot force and NaN recoveries.
+Esc cancels it. Every normal game is also added to `logs/runs.csv`, and F12
+saves a screenshot to `screenshots/`.
+
+Position-Based Dynamics gets stiffer the more solver passes it does per
+simulated second, so a longer time step gets proportionally more iterations
+(1/60 s uses 30, 1/120 s and 1/240 s use 15). The CSV records the number used.
+While the knot holds, a particle may move at most 5 cm in one step, and a
+particle is always pushed out of a capsule on the side it came from, so the
+cloth cannot tunnel through a leg. Results are in `docs/Evaluation.md`.
+
+## Features
+
+- Position-Based Dynamics cloth tube, 40 x 30 particles, with structural,
+  shear and bending constraints and long-range tethers
+- Capsule body collision with friction, and a waist knot that wears out and
+  fails
+- Gusting Kalboishakhi wind with storm stages and updrafts, drag on every
+  triangle
+- Five built-in woven patterns and photo-based pattern extraction
+  (grayscale, normalisation, intensity profiles, DFT, k-means, seamless tile)
+- Toon-shaded village scene, rain, lightning, HUD, Lungi Survival Score
+- Sound effects and ambience
 - Evaluation mode that logs FPS and stability to CSV
 
 ## Controls
@@ -85,6 +121,7 @@ Kalboishakhi Warrior (430+), Lungi Legend (520+).
 | Key | Title screen | In the storm |
 |-----|--------------|--------------|
 | Enter | Start | - |
+| E | Evaluation mode | - |
 | Up / Down | Difficulty | Orbit camera |
 | Left / Right | Lungi pattern | Orbit camera |
 | Space | Start | Hold to grab the knot |
@@ -96,6 +133,8 @@ Kalboishakhi Warrior (430+), Lungi Legend (520+).
 | T / Esc | Quit (Esc) | Back to title |
 | 1 / 2 / 3 / 4 | - | Sandbox: fix the wind preset |
 | G / U / W | - | Send a gust / send an updraft / wind on-off |
+| M | Sound on / off | Sound on / off |
+| F12 | Screenshot | Screenshot |
 | + / - | - | More / fewer solver iterations |
 | D | Debug panel | Debug panel |
 | F | Fullscreen | Fullscreen |
@@ -121,10 +160,14 @@ so no extra installation is needed.
 | `third_party/` | FreeGLUT and stb_image |
 | `assets/` | Textures, fabric photos, sounds |
 | `docs/` | Report material, test results |
+| `logs/` | Evaluation and game logs (created when needed) |
+| `screenshots/` | F12 screenshots (created when needed) |
 
 ## Screenshots
 
-Added when the cloth simulation is running.
+![Calm afternoon](docs/images/calm.jpg)
+
+![Updraft lifting the lungi](docs/images/updraft.jpg)
 
 ## Photo Lab controls
 
@@ -150,3 +193,6 @@ in separate files to make a later port easier.
 
 - FreeGLUT: windowing and input (MIT/X11-style licence).
 - stb_image by Sean Barrett: image loading (public domain / MIT).
+- Sounds: synthesised with `tools/make_sounds.py` (filtered noise and simple
+  envelopes; needs Python with numpy and scipy:
+  `python tools/make_sounds.py assets/sounds`). No third-party audio is used.

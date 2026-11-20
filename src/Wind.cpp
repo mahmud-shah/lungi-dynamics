@@ -44,6 +44,11 @@ int Wind::presetCount()
     return kPresetCount;
 }
 
+const char* Wind::presetName(int index)
+{
+    return kPresets[std::max(0, std::min(kPresetCount - 1, index))].name;
+}
+
 const WindPreset& Wind::preset() const
 {
     return kPresets[presetIndex_];
@@ -81,6 +86,7 @@ void Wind::triggerGust()
     gustAge_ = 0.0f;
     gustPeak_ = 1.0f;
     gustIsUpdraft_ = false;
+    gustStarted_ = true;
 }
 
 void Wind::triggerUpdraft()
@@ -88,6 +94,14 @@ void Wind::triggerUpdraft()
     gustAge_ = 0.0f;
     gustPeak_ = 1.0f;
     gustIsUpdraft_ = true;
+    gustStarted_ = true;
+}
+
+bool Wind::consumeGustStart()
+{
+    const bool started = gustStarted_;
+    gustStarted_ = false;
+    return started;
 }
 
 // Thunderstorm gusts are not always sideways: some carry rising air. The
@@ -108,6 +122,7 @@ void Wind::updateGust(float dt)
             gustAge_ = 0.0f;
             gustPeak_ = randomRange(0.45f, 1.0f);
             gustIsUpdraft_ = randomRange(0.0f, 1.0f) < preset().updraftChance;
+            gustStarted_ = gustPeak_ > 0.7f;
         }
         gustLevel_ = 0.0f;
         return;

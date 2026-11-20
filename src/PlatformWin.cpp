@@ -4,6 +4,8 @@
 
 #include <windows.h>
 #include <commdlg.h>
+#include <direct.h>
+#include <cerrno>
 
 // Native "Open" dialog from comdlg32. OFN_NOCHANGEDIR stops the dialog from
 // changing the working directory, which would otherwise break the relative
@@ -28,11 +30,24 @@ bool Platform::chooseImageFile(std::string& path)
     return false;
 }
 
+bool Platform::makeDirectory(const std::string& path)
+{
+    return _mkdir(path.c_str()) == 0 || errno == EEXIST;
+}
+
 #else
+
+#include <cerrno>
+#include <sys/stat.h>
 
 bool Platform::chooseImageFile(std::string&)
 {
     return false;
+}
+
+bool Platform::makeDirectory(const std::string& path)
+{
+    return mkdir(path.c_str(), 0755) == 0 || errno == EEXIST;
 }
 
 #endif

@@ -34,6 +34,7 @@ public:
 
     void setSolverIterations(int iterations);
     int solverIterations() const { return iterations_; }
+    int iterationsFor(float dt) const;
 
     int particleCount() const { return static_cast<int>(positions_.size()); }
     int constraintCount() const { return static_cast<int>(constraints_.size()); }

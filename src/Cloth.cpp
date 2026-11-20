@@ -20,6 +20,8 @@ const float kGatherWidth = 0.5f;
 const float kLungiMass = 0.5f;
 const float kAirDragCoefficient = 0.6f;
 const float kSkinFrictionCoefficient = 0.05f;
+const float kMaxStepDisplacement = 0.05f;
+const float kReferenceStep = 1.0f / 120.0f;
 
 const float kInsideShade = 0.7f;
 
@@ -197,18 +199,24 @@ void Cloth::step(float dt, const Vec3& gravity, const Body& body, const Wind& wi
         }
         const Vec3 acceleration = gravity + forces_[i] * inverseParticleMass;
         Vec3 v = (velocities_[i] + acceleration * dt) * velocityRetention_;
+        // Two safety limits: an absolute speed cap, and, while the knot holds,
+        // a cap on how far a particle may move in one step. With a large time
+        // step a particle that jumps several cloth cells at once cannot be
+        // pulled back by the solver and the cloth snags around the legs.
+        const float limit = knotAttached_ ? std::min(maxSpeed_, kMaxStepDisplacement / dt) : maxSpeed_;
         const float speed = length(v);
-        if (speed > maxSpeed_) {
-            v *= maxSpeed_ / speed;
+        if (speed > limit) {
+            v *= limit / speed;
         }
         velocities_[i] = v;
         predicted_[i] = positions_[i] + v * dt;
     }
 
-    for (int it = 0; it < iterations_; ++it) {
+    const int iterations = iterationsFor(dt);
+    for (int it = 0; it < iterations; ++it) {
         solveDistanceConstraints();
         solveTethers();
-        solveCollisions(body, it == iterations_ - 1);
+        solveCollisions(body, it == iterations - 1);
     }
 
     for (size_t i = 0; i < count; ++i) {
@@ -341,7 +349,7 @@ void Cloth::solveCollisions(const Body& body, bool applyFriction)
             continue;
         }
         Vec3 normal;
-        if (body.pushOut(predicted_[i], thickness_, normal) && applyFriction) {
+        if (body.pushOut(predicted_[i], positions_[i], thickness_, normal) && applyFriction) {
             const Vec3 moved = predicted_[i] - positions_[i];
             const Vec3 tangential = moved - normal * dot(moved, normal);
             predicted_[i] -= tangential * friction_;
@@ -511,4 +519,12 @@ void Cloth::draw(const ToonRamp& ramp, const FabricTexture& fabric, const Vec3& 
     glDisableClientState(GL_VERTEX_ARRAY);
     glCullFace(GL_BACK);
     glDisable(GL_CULL_FACE);
+}
+
+// PBD stiffness depends on how many solver passes happen per simulated
+// second, so a longer time step gets proportionally more iterations. The
+// set value is the count used at the reference 120 Hz step.
+int Cloth::iterationsFor(float dt) const
+{
+    return std::max(iterations_, static_cast<int>(std::lround(iterations_ * dt / kReferenceStep)));
 }

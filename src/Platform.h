@@ -7,5 +7,6 @@
 namespace Platform {
 
 bool chooseImageFile(std::string& path);
+bool makeDirectory(const std::string& path);
 
 } // namespace Platform

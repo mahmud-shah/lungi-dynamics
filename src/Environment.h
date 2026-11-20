@@ -1,7 +1,5 @@
 #pragma once
 
-#include <vector>
-
 #include "Vec3.h"
 
 class Environment {
@@ -9,6 +7,7 @@ public:
     Environment();
 
     void setStorm(float storm);
+    void setFlash(float flash) { flash_ = flash; }
     float storm() const { return storm_; }
 
     Vec3 lightDir() const { return lightDir_; }
@@ -17,7 +16,6 @@ public:
     void drawSky() const;
     void drawSun(const Vec3& eye) const;
     void applyFog() const;
-    void drawGround() const;
 
 private:
     struct SkyColors {
@@ -29,6 +27,6 @@ private:
     SkyColors skyColors() const;
 
     float storm_ = 0.0f;
+    float flash_ = 0.0f;
     Vec3 lightDir_;
-    std::vector<Vec3> groundTileColors_;
 };

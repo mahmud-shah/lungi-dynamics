@@ -21,6 +21,7 @@ public:
     void setPreset(int index);
     int presetIndex() const { return presetIndex_; }
     static int presetCount();
+    static const char* presetName(int index);
     const WindPreset& preset() const;
 
     void setEnabled(bool enabled) { enabled_ = enabled; }
@@ -29,6 +30,7 @@ public:
     void reset(unsigned int seed = 20261125u);
     void triggerGust();
     void triggerUpdraft();
+    bool consumeGustStart();
     void update(float dt);
 
     Vec3 velocityAt(const Vec3& point) const;
@@ -60,6 +62,7 @@ private:
     float gustLevel_ = 0.0f;
     float timeToNextGust_ = 2.0f;
     bool gustIsUpdraft_ = false;
+    bool gustStarted_ = false;
 
     std::vector<Vec3> streaks_;
 };

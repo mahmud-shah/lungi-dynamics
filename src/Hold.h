@@ -14,6 +14,7 @@ class Hold {
 public:
     void reset(unsigned int seed);
     void update(float dt, float windSpeed, float knotLoad, bool playerWantsGrip);
+    void letGo();
 
     HoldState state() const { return state_; }
     bool holding() const { return state_ == HoldState::Reflex || state_ == HoldState::Player; }
