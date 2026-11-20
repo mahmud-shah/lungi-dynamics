@@ -28,6 +28,7 @@ class FabricTexture {
 public:
     void create();
     void upload(const FabricPattern& pattern);
+    void uploadTexels(const std::vector<unsigned char>& rgb, int size, const Vec3& mainColor);
     void bind() const;
     void unbind() const;
 

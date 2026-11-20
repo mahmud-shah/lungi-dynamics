@@ -20,7 +20,6 @@ const float kGatherWidth = 0.5f;
 const float kLungiMass = 0.5f;
 const float kAirDragCoefficient = 0.6f;
 
-const float kPatternTileMetres = 0.32f;
 const float kInsideShade = 0.7f;
 
 float smoothstep01(float t)
@@ -252,6 +251,14 @@ void Cloth::solveTethers()
     }
 }
 
+void Cloth::setPatternTileMetres(float metres)
+{
+    patternTileMetres_ = metres;
+    if (cols_ > 0) {
+        buildRenderMesh();
+    }
+}
+
 void Cloth::releaseKnot()
 {
     knotAttached_ = false;
@@ -390,7 +397,7 @@ void Cloth::buildRenderMesh()
     const int renderCols = cols_ + 1;
     const Vec3 rim = naturalPositions_[index(0, 0)];
     const float flatRadius = std::sqrt(rim.x * rim.x + rim.z * rim.z);
-    const float repeatsAround = std::max(1.0f, std::round(6.2831853f * flatRadius / kPatternTileMetres));
+    const float repeatsAround = std::max(1.0f, std::round(6.2831853f * flatRadius / patternTileMetres_));
 
     renderPositions_.resize(renderCols * rows_);
     renderUVs_.resize(renderCols * rows_ * 2);
@@ -401,7 +408,7 @@ void Cloth::buildRenderMesh()
         for (int col = 0; col < renderCols; ++col) {
             const int r = row * renderCols + col;
             renderUVs_[r * 2 + 0] = repeatsAround * col / cols_;
-            renderUVs_[r * 2 + 1] = tetherLength_[index(col, row)] / kPatternTileMetres;
+            renderUVs_[r * 2 + 1] = tetherLength_[index(col, row)] / patternTileMetres_;
         }
     }
 

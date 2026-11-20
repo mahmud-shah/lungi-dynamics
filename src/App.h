@@ -10,6 +10,7 @@
 #include "Game.h"
 #include "Knot.h"
 #include "Pattern.h"
+#include "PhotoLab.h"
 #include "ToonRamp.h"
 #include "Wind.h"
 
@@ -32,6 +33,8 @@ struct AppState {
     std::vector<FabricPattern> patterns;
     FabricTexture fabric;
     int patternIndex = 3;
+    PhotoLab photoLab;
+    bool inPhotoLab = false;
 
     bool paused = false;
     bool showDebug = false;

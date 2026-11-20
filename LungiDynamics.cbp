@@ -66,11 +66,17 @@
 		<Unit filename="src/GlCheck.h" />
 		<Unit filename="src/Hud.cpp" />
 		<Unit filename="src/Hud.h" />
+		<Unit filename="src/ImageProc.cpp" />
+		<Unit filename="src/ImageProc.h" />
 		<Unit filename="src/Knot.cpp" />
 		<Unit filename="src/Knot.h" />
 		<Unit filename="src/main.cpp" />
 		<Unit filename="src/Pattern.cpp" />
 		<Unit filename="src/Pattern.h" />
+		<Unit filename="src/PhotoLab.cpp" />
+		<Unit filename="src/PhotoLab.h" />
+		<Unit filename="src/Platform.h" />
+		<Unit filename="src/PlatformWin.cpp" />
 		<Unit filename="src/StbImageImpl.cpp" />
 		<Unit filename="src/ToonRamp.cpp" />
 		<Unit filename="src/ToonRamp.h" />

@@ -24,6 +24,27 @@ front, the top edge is rolled into a band, and a double twist is tucked in.
 When the knot is overloaded, the roll unrolls, the twist slips out and the
 waistline slides down. The character wears three-quarter pants underneath.
 
+### Photo Lab (image processing)
+
+Press O on the title screen to open a photo of real lungi cloth. I select an area
+with the mouse and my code (written by hand, no OpenCV) turns it into a lungi
+texture:
+
+1. Grayscale (Y = 0.299 R + 0.587 G + 0.114 B) and illumination normalisation
+   (divide by a large box blur, computed with a summed-area table).
+2. Row and column intensity profiles.
+3. A Discrete Fourier Transform of each profile finds the repeat period, with a
+   sub-harmonic check, parabolic peak refinement and a shift test that rejects
+   false repeats (for example a rotated photo).
+4. K-means (k-means++ start) finds the 2 to 4 main colours.
+5. One repeat cell is resampled into a seamless tile (edge cross-fade) and
+   snapped to those colours.
+
+Every step is shown on screen. If no repeat is found, the program says so and
+the repeat can be set by hand with the arrow keys. Results on synthetic test
+photos are in `docs/ImageProcessingAccuracy.md` (24 of 25 correct). The photos
+in `assets/fabrics/synthetic_*.jpg` are generated test images, not real photos.
+
 ### Score
 
 Lungi Survival Score = (10 x seconds survived + 4 x strongest gust survived in
@@ -50,6 +71,7 @@ Kalboishakhi Warrior (450+), Lungi Legend (600+).
 | Left / Right | Lungi pattern | Orbit camera |
 | Space | Start | Hold to grab the knot |
 | L | Next lungi pattern | Next lungi pattern |
+| O | Open the Photo Lab | - |
 | S | - | Slow motion on / off |
 | P | - | Pause |
 | R | - | Restart the run |
@@ -85,6 +107,20 @@ so no extra installation is needed.
 ## Screenshots
 
 Added when the cloth simulation is running.
+
+## Photo Lab controls
+
+| Key | Action |
+|-----|--------|
+| O | Open a photo (Windows file dialog) |
+| Mouse drag | Select the fabric area |
+| K | Number of colours: auto, 2, 3, 4 |
+| Arrow keys | Adjust the repeat by hand (left/right across, up/down down) |
+| A | Back to automatic repeat |
+| Enter | Wear the fabric |
+| Esc | Back to the title screen |
+
+A photo can also be given on the command line: `LungiDynamics.exe photo.jpg`.
 
 ## Future work
 

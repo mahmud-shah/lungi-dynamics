@@ -193,14 +193,15 @@ void drawTitle(const AppState& app)
 
     std::snprintf(line, sizeof(line), "Difficulty:  <  %s  >      (Up / Down)", app.game.difficulty().name);
     centeredText(cx, top - 80, line, kMedium);
-    std::snprintf(line, sizeof(line), "Lungi:  <  %s  >      (Left / Right)", app.patterns[app.patternIndex].name);
+    const char* lungiName = app.patternIndex >= 0 ? app.patterns[app.patternIndex].name : "Your photo";
+    std::snprintf(line, sizeof(line), "Lungi:  <  %s  >      (Left / Right)", lungiName);
     centeredText(cx, top - 110, line, kMedium);
 
     glColor3f(0.55f, 0.16f, 0.12f);
     centeredText(cx, top - 160, "Press ENTER to face the storm", kLarge);
     glColor3f(0.25f, 0.20f, 0.18f);
     centeredText(cx, top - 195, "In the storm, hold SPACE to grab the knot. Grip runs out, so save it for the gusts!", kSmall);
-    centeredText(cx, top - 215, "Esc: quit", kSmall);
+    centeredText(cx, top - 215, "O: make a lungi from your own fabric photo      Esc: quit", kSmall);
 }
 
 void drawResults(const AppState& app)

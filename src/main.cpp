@@ -7,6 +7,7 @@
 #include "Clock.h"
 #include "GlCheck.h"
 #include "Hud.h"
+#include "Platform.h"
 
 namespace {
 
@@ -27,6 +28,8 @@ const float kLungiLength = 0.84f;
 const float kStormEaseRate = 0.8f;
 const float kTitleOrbitSpeed = 0.15f;
 const float kSlowMotionScale = 0.25f;
+const float kBuiltInTileMetres = 0.32f;
+const float kPhotoTileMetres = 0.16f;
 
 void printGlInfo()
 {
@@ -40,6 +43,35 @@ void selectPattern(int index)
     const int count = static_cast<int>(g_app.patterns.size());
     g_app.patternIndex = (index % count + count) % count;
     g_app.fabric.upload(g_app.patterns[g_app.patternIndex]);
+    g_app.cloth.setPatternTileMetres(kBuiltInTileMetres);
+}
+
+void openPhotoDialog()
+{
+    std::string path;
+    if (Platform::chooseImageFile(path)) {
+        g_app.photoLab.loadPhoto(path);
+    }
+}
+
+void enterPhotoLab()
+{
+    g_app.inPhotoLab = true;
+    if (!g_app.photoLab.hasPhoto()) {
+        openPhotoDialog();
+    }
+}
+
+// The extracted tile replaces the lungi texture. A photo tile holds one real
+// repeat of the cloth, which is smaller than the built-in tiles, so it is
+// mapped onto a smaller piece of the lungi.
+void wearPhotoFabric()
+{
+    const FabricAnalysis& a = g_app.photoLab.analysis();
+    g_app.fabric.uploadTexels(a.tile, a.tileSize, a.mainColor);
+    g_app.cloth.setPatternTileMetres(kPhotoTileMetres);
+    g_app.patternIndex = -1;
+    g_app.inPhotoLab = false;
 }
 
 void resetWorld(unsigned int stormSeed)
@@ -71,7 +103,7 @@ void startRun()
     resetWorld(20261125u + static_cast<unsigned int>(g_app.game.runNumber()));
 }
 
-void initScene()
+void initScene(const char* startupPhoto)
 {
     glEnable(GL_DEPTH_TEST);
     glShadeModel(GL_SMOOTH);
@@ -80,12 +112,17 @@ void initScene()
     g_app.toonRamp.create();
     g_app.patterns = Patterns::builtIn();
     g_app.fabric.create();
-    selectPattern(g_app.patternIndex);
+    g_app.photoLab.create();
 
     const Body& body = g_app.body;
     g_app.cloth.buildTube(TubeShape{body.waistCenter(), body.waistRadiusX(), body.waistRadiusZ(),
                                     kLungiFlatRadius, kLungiLength, kLungiAround, kLungiDown});
+    selectPattern(g_app.patternIndex);
     showTitle();
+    if (startupPhoto) {
+        g_app.photoLab.loadPhoto(startupPhoto);
+        g_app.inPhotoLab = true;
+    }
     g_app.lastFrameTime = Clock::nowSeconds();
     glCheck("initScene");
 }
@@ -151,6 +188,14 @@ void onDisplay()
     g_app.lastFrameTime = now;
     g_app.fps.registerFrame(now);
 
+    if (g_app.inPhotoLab) {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        g_app.photoLab.draw(g_app.windowWidth, g_app.windowHeight);
+        glutSwapBuffers();
+        glCheck("photoLab");
+        return;
+    }
+
     advanceSimulation(frameTime);
     if (g_app.game.state() == GameState::Title) {
         g_app.camera.rotate(kTitleOrbitSpeed * static_cast<float>(frameTime), 0.0f);
@@ -197,12 +242,41 @@ void onReshape(int width, int height)
     glViewport(0, 0, g_app.windowWidth, g_app.windowHeight);
 }
 
+void handlePhotoLabKey(unsigned char key)
+{
+    PhotoLab& lab = g_app.photoLab;
+    switch (key) {
+    case 27:
+        g_app.inPhotoLab = false;
+        break;
+    case 'o': case 'O':
+        openPhotoDialog();
+        break;
+    case 'k': case 'K':
+        lab.cycleColorCount();
+        break;
+    case 'a': case 'A':
+        lab.resetToAuto();
+        break;
+    case 13:
+        if (lab.canApply()) {
+            wearPhotoFabric();
+        }
+        break;
+    default:
+        break;
+    }
+}
+
 void handleTitleKey(unsigned char key)
 {
     switch (key) {
     case 13:
     case ' ':
         startRun();
+        break;
+    case 'o': case 'O':
+        enterPhotoLab();
         break;
     case 27:
         glutLeaveMainLoop();
@@ -273,6 +347,10 @@ void handlePlayKey(unsigned char key)
 
 void onKeyboard(unsigned char key, int, int)
 {
+    if (g_app.inPhotoLab) {
+        handlePhotoLabKey(key);
+        return;
+    }
     switch (key) {
     case 'f': case 'F':
         glutFullScreenToggle();
@@ -303,6 +381,16 @@ void onKeyboardUp(unsigned char key, int, int)
 
 void onSpecialKey(int key, int, int)
 {
+    if (g_app.inPhotoLab) {
+        switch (key) {
+        case GLUT_KEY_LEFT:  g_app.photoLab.adjustPeriod(-1.0f, 0.0f); break;
+        case GLUT_KEY_RIGHT: g_app.photoLab.adjustPeriod(1.0f, 0.0f); break;
+        case GLUT_KEY_DOWN:  g_app.photoLab.adjustPeriod(0.0f, -1.0f); break;
+        case GLUT_KEY_UP:    g_app.photoLab.adjustPeriod(0.0f, 1.0f); break;
+        default: break;
+        }
+        return;
+    }
     if (g_app.game.state() == GameState::Title) {
         switch (key) {
         case GLUT_KEY_LEFT:  selectPattern(g_app.patternIndex - 1); break;
@@ -326,6 +414,16 @@ void onSpecialKey(int key, int, int)
 
 void onMouse(int button, int state, int x, int y)
 {
+    if (g_app.inPhotoLab) {
+        if (button == GLUT_LEFT_BUTTON) {
+            if (state == GLUT_DOWN) {
+                g_app.photoLab.mouseDown(x, y);
+            } else {
+                g_app.photoLab.mouseUp(x, y);
+            }
+        }
+        return;
+    }
     if (button == GLUT_LEFT_BUTTON) {
         if (state == GLUT_DOWN) {
             g_app.camera.beginDrag(x, y);
@@ -337,6 +435,10 @@ void onMouse(int button, int state, int x, int y)
 
 void onMotion(int x, int y)
 {
+    if (g_app.inPhotoLab) {
+        g_app.photoLab.mouseDrag(x, y);
+        return;
+    }
     g_app.camera.dragTo(x, y);
 }
 
@@ -363,7 +465,7 @@ int main(int argc, char** argv)
     glutIgnoreKeyRepeat(1);
 
     printGlInfo();
-    initScene();
+    initScene(argc > 1 ? argv[1] : nullptr);
 
     glutDisplayFunc(onDisplay);
     glutReshapeFunc(onReshape);

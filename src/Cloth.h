@@ -26,6 +26,7 @@ public:
 
     void step(float dt, const Vec3& gravity, const Body& body, const Wind& wind);
     void releaseKnot();
+    void setPatternTileMetres(float metres);
     bool knotAttached() const { return knotAttached_; }
     void setWaistDrop(float metres) { waistDrop_ = metres; }
     float knotLoad() const { return knotLoad_; }
@@ -69,6 +70,7 @@ private:
     float thickness_ = 0.02f;
     float friction_ = 0.4f;
     float particleMass_ = 0.0f;
+    float patternTileMetres_ = 0.32f;
 
     bool knotAttached_ = true;
     float waistDrop_ = 0.0f;

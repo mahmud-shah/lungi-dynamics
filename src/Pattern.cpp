@@ -90,15 +90,19 @@ void FabricTexture::upload(const FabricPattern& pattern)
             texels_[i + 2] = static_cast<unsigned char>(clamp01(c.z) * 255.0f);
         }
     }
-    mainColor_ = sum / static_cast<float>(kSize * kSize);
+    uploadTexels(texels_, kSize, sum / static_cast<float>(kSize * kSize));
+}
 
+void FabricTexture::uploadTexels(const std::vector<unsigned char>& rgb, int size, const Vec3& mainColor)
+{
+    mainColor_ = mainColor;
     glBindTexture(GL_TEXTURE_2D, textureId_);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGB, kSize, kSize, GL_RGB, GL_UNSIGNED_BYTE, texels_.data());
+    gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGB, size, size, GL_RGB, GL_UNSIGNED_BYTE, rgb.data());
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
