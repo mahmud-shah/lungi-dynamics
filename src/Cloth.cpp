@@ -19,6 +19,7 @@ const float kGatherAmount = 0.75f;
 const float kGatherWidth = 0.5f;
 const float kLungiMass = 0.5f;
 const float kAirDragCoefficient = 0.6f;
+const float kSkinFrictionCoefficient = 0.05f;
 
 const float kInsideShade = 0.7f;
 
@@ -268,11 +269,13 @@ void Cloth::releaseKnot()
     }
 }
 
-// Aerodynamic drag on each triangle, using only the part of the relative air
-// velocity that hits the surface head-on:
-//   F = c * area * (n . v_rel) * |n . v_rel| * n,   v_rel = v_wind - v_cloth
-// A triangle facing the wind catches the full force; one edge-on to it
-// catches almost none. Each corner receives a third of the force.
+// Aerodynamic force on each triangle, v_rel = v_wind - v_cloth, split into
+// the part hitting the surface head-on (pressure drag) and the part sliding
+// along it (skin friction, much weaker):
+//   F = c_d * A * (n . v_rel) |n . v_rel| n  +  c_f * A * |v_t| v_t,
+//   v_t = v_rel - (n . v_rel) n
+// Pressure drag pushes the cloth sideways; skin friction is what lets a
+// rising updraft drag the vertical tube upwards. Each corner gets a third.
 void Cloth::accumulateWindForces(const Wind& wind)
 {
     std::fill(forces_.begin(), forces_.end(), Vec3());
@@ -294,7 +297,10 @@ void Cloth::accumulateWindForces(const Wind& wind)
         const Vec3 clothVelocity = (velocities_[a] + velocities_[b] + velocities_[c]) / 3.0f;
         const Vec3 relative = wind.velocityAt(center) - clothVelocity;
         const float normalSpeed = dot(n, relative);
-        const Vec3 force = n * (kAirDragCoefficient * 0.5f * doubleArea * normalSpeed * std::fabs(normalSpeed));
+        const Vec3 alongSurface = relative - n * normalSpeed;
+        const float area = 0.5f * doubleArea;
+        const Vec3 force = n * (kAirDragCoefficient * area * normalSpeed * std::fabs(normalSpeed))
+                         + alongSurface * (kSkinFrictionCoefficient * area * length(alongSurface));
         const Vec3 share = force / 3.0f;
         forces_[a] += share;
         forces_[b] += share;
@@ -354,6 +360,15 @@ float Cloth::maxStretch() const
         worst = std::max(worst, length(positions_[c.a] - positions_[c.b]) / c.restLength - 1.0f);
     }
     return worst;
+}
+
+Vec3 Cloth::centroid() const
+{
+    Vec3 sum;
+    for (const Vec3& p : positions_) {
+        sum += p;
+    }
+    return positions_.empty() ? sum : sum / static_cast<float>(positions_.size());
 }
 
 float Cloth::meanStretch() const

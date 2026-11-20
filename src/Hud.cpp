@@ -1,6 +1,7 @@
 #include "Hud.h"
 
 #include <GL/freeglut.h>
+#include <cmath>
 #include <cstdio>
 
 #include "App.h"
@@ -92,12 +93,13 @@ void drawPlayPanel(const AppState& app)
     const int top = app.windowHeight - kMargin - 12;
     char line[128];
 
-    rect(kMargin - 6, top - 7 * kLine - 4, 300, 7 * kLine + 22, 0.98f, 0.95f, 0.88f, 0.55f);
+    rect(kMargin - 6, top - 7 * kLine - 4, 330, 7 * kLine + 22, 0.98f, 0.95f, 0.88f, 0.55f);
     glColor3f(0.12f, 0.10f, 0.10f);
 
     const float speed = app.wind.speed();
-    std::snprintf(line, sizeof(line), "Wind: %s  %.1f m/s (%.0f km/h)%s",
-                  app.wind.preset().name, speed, speed * 3.6f, app.sandbox ? "  [sandbox]" : "");
+    std::snprintf(line, sizeof(line), "Wind: %s  %.1f m/s (%.0f km/h)%s%s",
+                  app.wind.preset().name, speed, speed * 3.6f, app.wind.updraftActive() ? "  UPDRAFT!" : "",
+                  app.sandbox ? "  [sandbox]" : "");
     text(kMargin, top, line);
 
     std::snprintf(line, sizeof(line), "Knot: %s   health %.0f%%", app.knot.status(), app.knot.health() * 100.0f);
@@ -109,9 +111,22 @@ void drawPlayPanel(const AppState& app)
                   app.knot.load() * 100.0f, app.knot.strength());
     text(kMargin, top - 3 * kLine - 4, line);
 
-    drawBar(kMargin, top - 4 * kLine - 10, 270, 12, game.gripStamina(), 0.30f, 0.55f, 0.90f);
+    const Hold& hold = game.hold();
+    drawBar(kMargin, top - 4 * kLine - 10, 270, 12, hold.stamina(), 0.30f, 0.55f, 0.90f);
     glColor3f(0.12f, 0.10f, 0.10f);
-    text(kMargin, top - 5 * kLine - 8, game.gripping() ? "Grip: HOLDING THE KNOT!" : "Grip: hold SPACE to grab the knot");
+    const char* holdText = "hold SPACE to grab the knot";
+    switch (hold.state()) {
+    case HoldState::Player:  holdText = "HOLDING ON WITH BOTH HANDS!"; break;
+    case HoldState::Reflex:  holdText = "grabbed the knot by reflex"; break;
+    case HoldState::Slipped: holdText = "HANDS SLIPPED!"; break;
+    default: break;
+    }
+    std::snprintf(line, sizeof(line), "Grip: %s   (hold power %.0f%%)", holdText, hold.effectiveness() * 100.0f);
+    if (hold.state() == HoldState::Slipped) {
+        glColor3f(0.75f, 0.12f, 0.10f);
+    }
+    text(kMargin, top - 5 * kLine - 8, line);
+    glColor3f(0.12f, 0.10f, 0.10f);
 
     std::snprintf(line, sizeof(line), "Survived: %.1f s   score %d   (%s)",
                   game.survivalTime(), game.score(), game.difficulty().name);
@@ -161,10 +176,59 @@ void drawAnnouncement(const AppState& app)
     centeredText(cx, y, s, kLarge);
 }
 
+// A speech bubble beside the character's head, with a small tail pointing
+// at the projected head position.
+void drawSpeech(const AppState& app)
+{
+    const Speech& speech = app.game.speech();
+    const float alpha = speech.alpha();
+    if (alpha <= 0.0f) {
+        return;
+    }
+    const char* s = speech.text();
+    const float w = textWidth(s, kMedium) + 24.0f;
+    const float h = 34.0f;
+    float x = app.headScreenX + 40.0f;
+    if (x + w > app.windowWidth - 10) {
+        x = app.headScreenX - 40.0f - w;
+    }
+    const float y = app.headScreenY + 10.0f;
+
+    rect(x, y, w, h, 1.0f, 1.0f, 1.0f, 0.92f * alpha);
+    glColor4f(1.0f, 1.0f, 1.0f, 0.92f * alpha);
+    glBegin(GL_TRIANGLES);
+    glVertex2f(x + (x > app.headScreenX ? 6.0f : w - 6.0f), y + 6.0f);
+    glVertex2f(x + (x > app.headScreenX ? 22.0f : w - 22.0f), y);
+    glVertex2f(app.headScreenX, app.headScreenY - 6.0f);
+    glEnd();
+    glColor4f(0.15f, 0.12f, 0.10f, alpha);
+    text(static_cast<int>(x + 12), static_cast<int>(y + 11), s, kMedium);
+}
+
+void drawShockBubble(const AppState& app)
+{
+    if (app.game.face() != Face::Shock) {
+        return;
+    }
+    const float cx = app.headScreenX;
+    const float cy = app.headScreenY + 70.0f;
+    glColor4f(1.0f, 0.95f, 0.30f, 0.95f);
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f(cx, cy);
+    for (int i = 0; i <= 16; ++i) {
+        const float a = 6.2831853f * i / 16;
+        const float r = (i % 2 == 0) ? 34.0f : 24.0f;
+        glVertex2f(cx + r * std::cos(a), cy + r * std::sin(a));
+    }
+    glEnd();
+    glColor3f(0.80f, 0.10f, 0.08f);
+    centeredText(static_cast<int>(cx), static_cast<int>(cy - 8), "!!", kLarge);
+}
+
 void drawFailureBanner(const AppState& app)
 {
     const int cx = app.windowWidth / 2;
-    const int cy = app.windowHeight / 2 + 120;
+    const int cy = 110;
     const char* s = "!!  THE KNOT GAVE UP  !!";
     const int w = textWidth(s, kLarge) + 50;
     rect(cx - w / 2.0f, cy - 16, w, 48, 0.98f, 0.93f, 0.80f, 0.9f);
@@ -211,21 +275,23 @@ void drawResults(const AppState& app)
     const int top = app.windowHeight - 120;
     char line[160];
 
-    rect(cx - 300, top - 300, 600, 350, 0.98f, 0.94f, 0.85f, 0.88f);
+    rect(cx - 280, top - 300, 560, 350, 0.98f, 0.94f, 0.85f, 0.88f);
 
     glColor3f(0.70f, 0.12f, 0.10f);
     centeredText(cx, top, "!!  THE KNOT GAVE UP  !!", kLarge);
+    glColor3f(0.40f, 0.20f, 0.10f);
+    centeredText(cx, top - 24, game.outcomeText(), kMedium);
 
     glColor3f(0.20f, 0.16f, 0.14f);
     std::snprintf(line, sizeof(line), "Survived: %.1f s", game.survivalTime());
-    centeredText(cx, top - 45, line, kMedium);
+    centeredText(cx, top - 52, line, kMedium);
     std::snprintf(line, sizeof(line), "Strongest gust survived: %.1f m/s (%.0f km/h)",
                   game.strongestGustSurvived(), game.strongestGustSurvived() * 3.6f);
-    centeredText(cx, top - 70, line, kMedium);
+    centeredText(cx, top - 76, line, kMedium);
     std::snprintf(line, sizeof(line), "Lungi displacement penalty: -%.0f", game.displacementPenalty());
-    centeredText(cx, top - 95, line, kMedium);
+    centeredText(cx, top - 100, line, kMedium);
     std::snprintf(line, sizeof(line), "Difficulty: %s (x%.1f)", game.difficulty().name, game.difficulty().scoreMultiplier);
-    centeredText(cx, top - 120, line, kMedium);
+    centeredText(cx, top - 124, line, kMedium);
 
     glColor3f(0.12f, 0.30f, 0.20f);
     std::snprintf(line, sizeof(line), "Lungi Survival Score: %d", game.score());
@@ -253,12 +319,14 @@ void draw(const AppState& app)
     } else if (state == GameState::Playing) {
         drawPlayPanel(app);
         drawAnnouncement(app);
+        drawShockBubble(app);
+        drawSpeech(app);
         if (app.knot.failed()) {
             drawFailureBanner(app);
         }
         glColor3f(0.12f, 0.10f, 0.10f);
         text(kMargin, kMargin,
-             "SPACE: grip   L: lungi   S: slow-mo   P: pause   R: restart   T: title   1-4: sandbox wind   D: debug   Drag/wheel: camera");
+             "SPACE: grip   L: lungi   S: slow-mo   P: pause   R: restart   T: title   1-4: sandbox wind   G/U: gust/updraft   D: debug   Drag/wheel: camera");
     } else {
         drawResults(app);
     }

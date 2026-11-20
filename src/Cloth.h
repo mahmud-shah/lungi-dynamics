@@ -40,6 +40,7 @@ public:
     int recoveries() const { return recoveries_; }
     float maxStretch() const;
     float meanStretch() const;
+    Vec3 centroid() const;
 
 private:
     struct DistanceConstraint {

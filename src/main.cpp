@@ -142,14 +142,18 @@ void physicsStep(float dt)
     g_app.cloth.step(dt, kGravity, g_app.body, g_app.wind);
 
     if (game.state() == GameState::Title) {
+        g_app.body.setPose(ArmPose::Down, Face::Calm);
         return;
     }
     g_app.knot.update(dt, g_app.cloth.knotLoad());
     if (g_app.knot.failed() && g_app.cloth.knotAttached()) {
         g_app.cloth.releaseKnot();
     }
-    game.update(dt, g_app.knot.failed(), g_app.wind.speed(), g_app.knot.waistDrop(), g_app.gripKeyHeld);
-    g_app.body.setGripping(game.gripping());
+    const GameInput input{g_app.knot.failed(), g_app.wind.speed(), g_app.wind.updraftActive(),
+                          g_app.knot.waistDrop(), g_app.knot.load(), g_app.cloth.centroid().y,
+                          g_app.gripKeyHeld};
+    game.update(dt, input);
+    g_app.body.setPose(game.armPose(), game.face());
 }
 
 // Fixed-timestep loop: physics always advances in equal 1/120 s steps, no
@@ -171,6 +175,24 @@ void advanceSimulation(double frameTime)
     if (g_app.substepsLastFrame == kMaxSubsteps) {
         g_app.physicsAccumulator = 0.0;
     }
+}
+
+// The speech bubble is 2D, so the 3D point just above the head is projected
+// to window coordinates with the current camera matrices.
+void projectHeadToScreen()
+{
+    GLdouble model[16];
+    GLdouble projection[16];
+    GLint viewport[4];
+    glGetDoublev(GL_MODELVIEW_MATRIX, model);
+    glGetDoublev(GL_PROJECTION_MATRIX, projection);
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    GLdouble x = 0.0;
+    GLdouble y = 0.0;
+    GLdouble z = 0.0;
+    gluProject(0.0, 1.95, 0.0, model, projection, viewport, &x, &y, &z);
+    g_app.headScreenX = static_cast<float>(x);
+    g_app.headScreenY = static_cast<float>(y);
 }
 
 void easeStormTowardWind(float frameTime)
@@ -208,7 +230,12 @@ void onDisplay()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     env.drawSky();
 
+    const bool lungiLeaving = g_app.game.state() == GameState::Playing && g_app.knot.failed();
+    const float lungiHeight = g_app.cloth.centroid().y;
+    g_app.camera.setTargetHeight(lungiLeaving ? std::max(0.9f, std::min(lungiHeight, 1.8f)) : 0.9f);
+
     g_app.camera.apply(g_app.windowWidth, g_app.windowHeight);
+    projectHeadToScreen();
     env.drawSun(g_app.camera.eye());
 
     env.applyFog();
@@ -330,6 +357,9 @@ void handlePlayKey(unsigned char key)
         break;
     case 'g': case 'G':
         wind.triggerGust();
+        break;
+    case 'u': case 'U':
+        wind.triggerUpdraft();
         break;
     case 'w': case 'W':
         wind.setEnabled(!wind.enabled());

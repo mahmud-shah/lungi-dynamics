@@ -13,6 +13,7 @@ public:
     void rotate(float deltaYaw, float deltaPitch);
     void zoom(int steps);
     void faceFront();
+    void setTargetHeight(float y) { goalTargetY_ = y; }
 
     Vec3 eye() const;
 
@@ -26,6 +27,7 @@ private:
     float goalYaw_ = 0.6f;
     float goalPitch_ = 0.22f;
     float goalDistance_ = 4.0f;
+    float goalTargetY_ = 0.9f;
 
     bool dragging_ = false;
     int lastX_ = 0;

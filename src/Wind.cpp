@@ -7,16 +7,17 @@
 namespace {
 
 const WindPreset kPresets[] = {
-    {"Mridu Batash", 1.5f, 2.0f, 0.0f},
-    {"Jhor Asche!", 4.0f, 5.0f, 0.35f},
-    {"Kalboishakhi", 6.0f, 8.0f, 0.7f},
-    {"Nor'wester Mode", 8.0f, 12.0f, 1.0f},
+    {"Mridu Batash", 1.5f, 2.0f, 0.0f, 0.0f, 0.0f},
+    {"Jhor Asche!", 4.0f, 5.0f, 0.35f, 0.15f, 6.0f},
+    {"Kalboishakhi", 6.0f, 8.0f, 0.7f, 0.45f, 13.0f},
+    {"Nor'wester Mode", 8.0f, 12.0f, 1.0f, 0.50f, 16.0f},
 };
 const int kPresetCount = sizeof(kPresets) / sizeof(kPresets[0]);
 
 const float kBaseHeading = -1.25f;
 const float kGustRise = 0.5f;
 const float kGustHold = 0.8f;
+const float kUpdraftHold = 2.4f;
 const float kGustFall = 1.4f;
 
 const int kStreakCount = 160;
@@ -69,6 +70,7 @@ void Wind::reset(unsigned int seed)
     gustAge_ = -1.0f;
     gustLevel_ = 0.0f;
     timeToNextGust_ = 2.0f;
+    gustIsUpdraft_ = false;
     for (size_t i = 0; i < streaks_.size(); ++i) {
         respawnStreak(i, true);
     }
@@ -78,6 +80,24 @@ void Wind::triggerGust()
 {
     gustAge_ = 0.0f;
     gustPeak_ = 1.0f;
+    gustIsUpdraft_ = false;
+}
+
+void Wind::triggerUpdraft()
+{
+    gustAge_ = 0.0f;
+    gustPeak_ = 1.0f;
+    gustIsUpdraft_ = true;
+}
+
+// Thunderstorm gusts are not always sideways: some carry rising air. The
+// rising part follows the same gust envelope as the gust itself.
+float Wind::updraftSpeed() const
+{
+    if (!enabled_ || !gustIsUpdraft_) {
+        return 0.0f;
+    }
+    return preset().updraftSpeed * gustLevel_;
 }
 
 void Wind::updateGust(float dt)
@@ -87,18 +107,22 @@ void Wind::updateGust(float dt)
         if (timeToNextGust_ <= 0.0f) {
             gustAge_ = 0.0f;
             gustPeak_ = randomRange(0.45f, 1.0f);
+            gustIsUpdraft_ = randomRange(0.0f, 1.0f) < preset().updraftChance;
         }
         gustLevel_ = 0.0f;
         return;
     }
 
+    // Thunderstorm updrafts are steady columns of rising air, so they last
+    // longer than an ordinary sideways gust.
+    const float hold = gustIsUpdraft_ ? kUpdraftHold : kGustHold;
     gustAge_ += dt;
     if (gustAge_ < kGustRise) {
         gustLevel_ = smoothstep01(gustAge_ / kGustRise);
-    } else if (gustAge_ < kGustRise + kGustHold) {
+    } else if (gustAge_ < kGustRise + hold) {
         gustLevel_ = 1.0f;
-    } else if (gustAge_ < kGustRise + kGustHold + kGustFall) {
-        gustLevel_ = 1.0f - smoothstep01((gustAge_ - kGustRise - kGustHold) / kGustFall);
+    } else if (gustAge_ < kGustRise + hold + kGustFall) {
+        gustLevel_ = 1.0f - smoothstep01((gustAge_ - kGustRise - hold) / kGustFall);
     } else {
         gustAge_ = -1.0f;
         gustLevel_ = 0.0f;
@@ -142,7 +166,7 @@ Vec3 Wind::velocityAt(const Vec3& p) const
     const float ripple = 1.0f + 0.20f * std::sin(1.3f * p.x + 2.1f * t) * std::cos(1.7f * p.y - 1.4f * t)
                               + 0.15f * std::sin(2.3f * p.z + 3.3f * t);
     const float lift = 0.15f * std::sin(2.0f * p.y + 2.7f * t + p.x);
-    return direction() * (speed_ * ripple) + Vec3(0.0f, lift * speed_, 0.0f);
+    return direction() * (speed_ * ripple) + Vec3(0.0f, lift * speed_ + updraftSpeed(), 0.0f);
 }
 
 void Wind::respawnStreak(size_t i, bool anywhere)

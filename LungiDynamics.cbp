@@ -64,6 +64,8 @@
 		<Unit filename="src/Game.cpp" />
 		<Unit filename="src/Game.h" />
 		<Unit filename="src/GlCheck.h" />
+		<Unit filename="src/Hold.cpp" />
+		<Unit filename="src/Hold.h" />
 		<Unit filename="src/Hud.cpp" />
 		<Unit filename="src/Hud.h" />
 		<Unit filename="src/ImageProc.cpp" />
@@ -77,6 +79,8 @@
 		<Unit filename="src/PhotoLab.h" />
 		<Unit filename="src/Platform.h" />
 		<Unit filename="src/PlatformWin.cpp" />
+		<Unit filename="src/Speech.cpp" />
+		<Unit filename="src/Speech.h" />
 		<Unit filename="src/StbImageImpl.cpp" />
 		<Unit filename="src/ToonRamp.cpp" />
 		<Unit filename="src/ToonRamp.h" />

@@ -10,6 +10,8 @@ struct WindPreset {
     float baseSpeed;
     float gustSpeed;
     float storm;
+    float updraftChance;
+    float updraftSpeed;
 };
 
 class Wind {
@@ -26,12 +28,15 @@ public:
 
     void reset(unsigned int seed = 20261125u);
     void triggerGust();
+    void triggerUpdraft();
     void update(float dt);
 
     Vec3 velocityAt(const Vec3& point) const;
     Vec3 direction() const;
     float speed() const { return enabled_ ? speed_ : 0.0f; }
     float strongestGust() const { return strongestGust_; }
+    float updraftSpeed() const;
+    bool updraftActive() const { return updraftSpeed() > 1.0f; }
 
     void drawStreaks(float brightness) const;
 
@@ -54,6 +59,7 @@ private:
     float gustPeak_ = 0.0f;
     float gustLevel_ = 0.0f;
     float timeToNextGust_ = 2.0f;
+    bool gustIsUpdraft_ = false;
 
     std::vector<Vec3> streaks_;
 };

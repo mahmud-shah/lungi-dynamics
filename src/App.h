@@ -41,6 +41,8 @@ struct AppState {
     bool sandbox = false;
     bool gripKeyHeld = false;
     float timeScale = 1.0f;
+    float headScreenX = 0.0f;
+    float headScreenY = 0.0f;
 
     double lastFrameTime = 0.0;
     double physicsAccumulator = 0.0;

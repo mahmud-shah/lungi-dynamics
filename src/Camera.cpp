@@ -36,6 +36,7 @@ void OrbitCamera::update(float dt)
     yaw_ += (goalYaw_ - yaw_) * t;
     pitch_ += (goalPitch_ - pitch_) * t;
     distance_ += (goalDistance_ - distance_) * t;
+    target_.y += (goalTargetY_ - target_.y) * t * 0.5f;
 }
 
 void OrbitCamera::beginDrag(int x, int y)
@@ -89,4 +90,5 @@ void OrbitCamera::faceFront()
     goalYaw_ = frontYaw + twoPi * std::round((yaw_ - frontYaw) / twoPi);
     goalPitch_ = 0.22f;
     goalDistance_ = 4.0f;
+    goalTargetY_ = 0.9f;
 }

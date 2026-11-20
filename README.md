@@ -45,12 +45,30 @@ the repeat can be set by hand with the arrow keys. Results on synthetic test
 photos are in `docs/ImageProcessingAccuracy.md` (24 of 25 correct). The photos
 in `assets/fabrics/synthetic_*.jpg` are generated test images, not real photos.
 
+### Holding on, and which way the lungi goes
+
+The character grabs the knot by reflex when it strains, and holding Space is a
+stronger two-hand grip that uses stamina. How much a grip helps depends on the
+wind: full strength in a light breeze, falling to 15% in a Nor'wester
+(hold power = (22 - wind) / (22 - 6), clamped to 0.15 - 1). In winds above
+10 m/s the hands can be torn off the knot for a moment, more often the
+stronger the wind.
+
+Some gusts are thunderstorm updrafts (rising air). The wind model includes skin
+friction along the cloth surface, so a strong updraft can lift the whole tube.
+If the knot fails during an updraft, the lungi flies up over the character's
+head; otherwise it drops past the legs. In my test runs it flew up in about a
+quarter to a third of the games.
+
+The character's face changes with the knot load (calm, worried, panic, shock),
+the arms grab or flail, and a speech bubble shows Banglish and English lines.
+
 ### Score
 
 Lungi Survival Score = (10 x seconds survived + 4 x strongest gust survived in
 m/s - lungi displacement penalty) x difficulty multiplier (Easy 0.8, Normal 1.0,
 Hard 1.3). Tiers: Lungi Newbie (below 300), Gaye Joth Ase (300+),
-Kalboishakhi Warrior (450+), Lungi Legend (600+).
+Kalboishakhi Warrior (430+), Lungi Legend (520+).
 
 ## Features (planned)
 
@@ -77,7 +95,7 @@ Kalboishakhi Warrior (450+), Lungi Legend (600+).
 | R | - | Restart the run |
 | T / Esc | Quit (Esc) | Back to title |
 | 1 / 2 / 3 / 4 | - | Sandbox: fix the wind preset |
-| G / W | - | Send a gust / wind on-off |
+| G / U / W | - | Send a gust / send an updraft / wind on-off |
 | + / - | - | More / fewer solver iterations |
 | D | Debug panel | Debug panel |
 | F | Fullscreen | Fullscreen |

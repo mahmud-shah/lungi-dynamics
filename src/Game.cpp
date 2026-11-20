@@ -32,15 +32,15 @@ const ScoreTier kTiers[] = {
     {"Lungi Legend", {"Lungi Legend! They will talk about this at the haat.",
                       "The storm gave up before your knot did."}},
 };
-const int kTierThresholds[] = {0, 300, 450, 600};
+const int kTierThresholds[] = {0, 300, 430, 520};
 const int kTierCount = 4;
 
-const float kGripDrainPerSecond = 0.30f;
-const float kGripRefillPerSecond = 0.15f;
-const float kGripRecoverLevel = 0.25f;
-const float kGripStrengthBonus = 1.6f;
+const float kWorriedLoad = 0.5f;
+const float kPanicLoad = 0.9f;
 
-const float kResultsDelay = 2.0f;
+const float kOverHeadHeight = 1.9f;
+const float kOutcomeDecisionSeconds = 1.5f;
+const float kResultsDelay = 2.8f;
 
 } // namespace
 
@@ -57,11 +57,15 @@ void Game::startRun()
     strongestGust_ = 0.0f;
     dropIntegral_ = 0.0f;
     timeSinceFailure_ = 0.0f;
+    highestAfterFailure_ = 0.0f;
     lastStage_ = 0;
     announcementTime_ = 0.0f;
-    stamina_ = 1.0f;
-    gripping_ = false;
-    gripExhausted_ = false;
+    lastUpdraft_ = false;
+    hold_.reset(1000u + static_cast<unsigned int>(runNumber_));
+    speech_.reset(2000u + static_cast<unsigned int>(runNumber_));
+    face_ = Face::Calm;
+    outcome_ = Outcome::None;
+    speech_.say(Line::Calm, true);
 }
 
 int Game::difficultyCount()
@@ -79,42 +83,32 @@ const Difficulty& Game::difficulty() const
     return kDifficulties[difficultyIndex_];
 }
 
-// Grip stamina drains while Space is held and refills when it is released.
-// Once it hits zero the hands slip off and cannot grab again until it has
-// refilled to kGripRecoverLevel, so the player has to save it for gusts.
-void Game::update(float dt, bool knotFailed, float windSpeed, float waistDrop, bool gripHeld)
+void Game::update(float dt, const GameInput& in)
 {
     if (state_ != GameState::Playing) {
         return;
     }
+    speech_.update(dt);
 
-    if (knotFailed) {
-        gripping_ = false;
-        timeSinceFailure_ += dt;
-        if (timeSinceFailure_ >= kResultsDelay) {
-            state_ = GameState::Results;
-        }
+    if (in.knotFailed) {
+        updateFailure(dt, in);
         return;
     }
 
     survivalTime_ += dt;
-    strongestGust_ = std::max(strongestGust_, windSpeed);
-    dropIntegral_ += waistDrop * dt;
+    strongestGust_ = std::max(strongestGust_, in.windSpeed);
+    dropIntegral_ += in.waistDrop * dt;
 
-    if (gripExhausted_ && stamina_ >= kGripRecoverLevel) {
-        gripExhausted_ = false;
+    hold_.update(dt, in.windSpeed, in.knotLoad, in.gripKeyHeld);
+    if (hold_.justSlipped()) {
+        speech_.say(Line::Slipped, true);
     }
-    gripping_ = gripHeld && !gripExhausted_ && stamina_ > 0.0f;
-    if (gripping_) {
-        stamina_ -= kGripDrainPerSecond * dt;
-        if (stamina_ <= 0.0f) {
-            stamina_ = 0.0f;
-            gripExhausted_ = true;
-            gripping_ = false;
-        }
-    } else {
-        stamina_ = std::min(1.0f, stamina_ + kGripRefillPerSecond * dt);
+    if (in.updraft && !lastUpdraft_) {
+        speech_.say(Line::Updraft, true);
     }
+    lastUpdraft_ = in.updraft;
+
+    updateFace(in);
 
     const int stage = stormStage();
     if (stage != lastStage_) {
@@ -122,6 +116,68 @@ void Game::update(float dt, bool knotFailed, float windSpeed, float waistDrop, b
         announcementTime_ = 0.0f;
     }
     announcementTime_ += dt;
+}
+
+void Game::updateFace(const GameInput& in)
+{
+    Face next = Face::Calm;
+    if (hold_.state() == HoldState::Slipped || in.knotLoad >= kPanicLoad) {
+        next = Face::Panic;
+    } else if (in.knotLoad >= kWorriedLoad) {
+        next = Face::Worried;
+    }
+
+    if (next == Face::Panic && face_ != Face::Panic) {
+        speech_.say(Line::Panic, false);
+    } else if (next == Face::Worried && face_ == Face::Calm) {
+        speech_.say(Line::Worried, false);
+    }
+    face_ = next;
+}
+
+// After the knot fails, the lungi's height decides how it left: if it rises
+// above the head within 1.5 s it was carried up by an updraft, otherwise it
+// dropped. The results screen appears a little later, so the player sees it.
+void Game::updateFailure(float dt, const GameInput& in)
+{
+    face_ = Face::Shock;
+    timeSinceFailure_ += dt;
+    highestAfterFailure_ = std::max(highestAfterFailure_, in.lungiHeight);
+
+    if (outcome_ == Outcome::None) {
+        if (highestAfterFailure_ > kOverHeadHeight) {
+            outcome_ = Outcome::FlewUp;
+            speech_.say(Line::FlewUp, true);
+        } else if (timeSinceFailure_ > kOutcomeDecisionSeconds) {
+            outcome_ = Outcome::FellDown;
+            speech_.say(Line::FellDown, true);
+        }
+    }
+    if (timeSinceFailure_ >= kResultsDelay) {
+        state_ = GameState::Results;
+    }
+}
+
+ArmPose Game::armPose() const
+{
+    if (face_ == Face::Shock || hold_.state() == HoldState::Slipped) {
+        return ArmPose::Flail;
+    }
+    return hold_.holding() ? ArmPose::Grip : ArmPose::Down;
+}
+
+float Game::knotStrengthMultiplier() const
+{
+    return hold_.knotStrengthMultiplier();
+}
+
+const char* Game::outcomeText() const
+{
+    switch (outcome_) {
+    case Outcome::FlewUp: return "Your lungi flew up over your head!";
+    case Outcome::FellDown: return "Your lungi dropped down to your ankles!";
+    default: return "";
+    }
 }
 
 int Game::stormStage() const
@@ -149,13 +205,8 @@ float Game::announcementAlpha() const
     return std::min(1.0f, std::min(announcementTime_ * 4.0f, fadeOut * 2.0f));
 }
 
-float Game::knotStrengthMultiplier() const
-{
-    return gripping_ ? kGripStrengthBonus : 1.0f;
-}
-
-// Average waist drop over the run, in centimetres: how far the knot was
-// dragged down while it was holding.
+// Average waist drop over the run, in centimetres, times 3: how far the knot
+// was dragged down while it was still holding.
 float Game::displacementPenalty() const
 {
     if (survivalTime_ <= 0.0f) {
